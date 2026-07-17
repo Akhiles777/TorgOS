@@ -1,6 +1,6 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { requireApi } from "@/server/guard";
+import { requireApi, requireApiStoreScope, AuthError } from "@/server/guard";
 import {
   createProduct, updateProduct, setActive, moveStock, ProductError, type ProductInput,
 } from "@/server/services/products";
@@ -24,15 +24,15 @@ function readProduct(fd: FormData): ProductInput {
 
 export async function saveProductAction(_prev: unknown, fd: FormData): Promise<Result> {
   try {
-    const { user, db } = await requireApi("ADMIN", "OWNER");
-    if (!user.storeId) return { ok: false, error: "Нет точки" };
+    const { db, storeId } = await requireApiStoreScope("ADMIN", "OWNER");
     const id = String(fd.get("id") ?? "");
     if (id) await updateProduct(db, id, readProduct(fd));
-    else await createProduct(db, user.storeId, readProduct(fd));
+    else await createProduct(db, storeId, readProduct(fd));
     revalidatePath("/admin");
     return { ok: true };
   } catch (e) {
     if (e instanceof ProductError) return { ok: false, error: e.message };
+    if (e instanceof AuthError) return { ok: false, error: e.message };
     console.error(e);
     return { ok: false, error: "Не удалось сохранить товар" };
   }
@@ -68,9 +68,8 @@ export async function moveStockAction(_prev: unknown, fd: FormData): Promise<Res
 
 export async function createStaffAction(_prev: unknown, fd: FormData): Promise<Result> {
   try {
-    const { user, db } = await requireApi("ADMIN", "OWNER");
-    if (!user.storeId) return { ok: false, error: "Нет точки" };
-    await createStaff(db, user.organizationId, user.storeId, {
+    const { user, db, storeId } = await requireApiStoreScope("ADMIN", "OWNER");
+    await createStaff(db, user.organizationId, storeId, {
       name: String(fd.get("name") ?? ""),
       login: String(fd.get("login") ?? ""),
       password: String(fd.get("password") ?? ""),
@@ -80,6 +79,7 @@ export async function createStaffAction(_prev: unknown, fd: FormData): Promise<R
     return { ok: true };
   } catch (e) {
     if (e instanceof StaffError) return { ok: false, error: e.message };
+    if (e instanceof AuthError) return { ok: false, error: e.message };
     console.error(e);
     return { ok: false, error: "Не удалось добавить сотрудника" };
   }

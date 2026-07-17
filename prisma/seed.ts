@@ -87,6 +87,11 @@ const PRODUCTS: SeedProduct[] = [
 const d2 = (n: number) => new Prisma.Decimal(n.toFixed(2));
 const d3 = (n: number) => new Prisma.Decimal(n.toFixed(3));
 
+// Реальные учётки. Пароли — не демо-заглушки, поэтому НЕ печатаются в консоль
+// и не показываются на странице входа; сообщите их лично Гасану/Земфире/Рите.
+const OWNER_PASSWORD = process.env.SEED_OWNER_PASSWORD || "Gasan-2026!";
+const CASHIER_PASSWORD = process.env.SEED_CASHIER_PASSWORD || "Kassa-2026!";
+
 async function main() {
   console.log("Очищаю базу…");
   await prisma.$transaction([
@@ -114,32 +119,32 @@ async function main() {
     },
   });
 
-  const [owner, admin, cashier] = await Promise.all([
+  // Гасан — владелец и одновременно администратор точки: одна учётка с ролью
+  // OWNER, но storeId привязан к единственной точке, поэтому ему открыт и
+  // /admin (по умолчанию OWNER без storeId туда не попадает — см. server/guard.ts).
+  const owner = await prisma.user.create({
+    data: {
+      organizationId: org.id, storeId: store.id, role: "OWNER",
+      name: "Гасан Алункачев", login: "gasan", passwordHash: hashSync(OWNER_PASSWORD, 10),
+    },
+  });
+  // Две кассирши — раздельные логины дают выбор смены самим фактом входа
+  // под своим именем, отдельного UI «выбрать смену» не требуется.
+  const [zemfira, rita] = await Promise.all([
     prisma.user.create({
       data: {
-        organizationId: org.id, role: "OWNER",
-        name: "Гасан Алункачев", login: "gasan", passwordHash: hashSync("owner123", 10),
-      },
-    }),
-    prisma.user.create({
-      data: {
-        organizationId: org.id, storeId: store.id, role: "ADMIN",
-        name: "Алункачев Гасан", login: "admin", passwordHash: hashSync("admin123", 10),
+        organizationId: org.id, storeId: store.id, role: "CASHIER",
+        name: "Земфира Абдулаева", login: "zemfira", passwordHash: hashSync(CASHIER_PASSWORD, 10),
       },
     }),
     prisma.user.create({
       data: {
         organizationId: org.id, storeId: store.id, role: "CASHIER",
-        name: "Рита Юсупова", login: "cassa", passwordHash: hashSync("kassa123", 10),
-      },
-    }),
-    prisma.user.create({
-      data: {
-        organizationId: org.id, storeId: store.id, role: "CASHIER",
-        name: "Земфира Абдулаева", login: "cassa", passwordHash: hashSync("kassa123", 10),
+        name: "Рита Юсупова", login: "rita", passwordHash: hashSync(CASHIER_PASSWORD, 10),
       },
     }),
   ]);
+  const cashiers = [zemfira, rita];
 
   await prisma.supplier.createMany({
     data: [
@@ -188,6 +193,9 @@ async function main() {
       const day = new Date(now.getTime() - dayOffset * dayMs);
       const createdAt = new Date(day.getFullYear(), day.getMonth(), day.getDate(), pick(hours), Math.floor(rand() * 60), Math.floor(rand() * 60));
       if (createdAt > now) continue;
+      // Смена — весь чек пробивает одна кассирша (реалистичнее, чем случайный
+      // кассир на каждую позицию), Гасан изредка подменяет на кассе.
+      const shiftCashier = rand() < 0.9 ? pick(cashiers) : owner;
       const itemCount = 1 + Math.floor(rand() * rand() * 6);
       const chosen = new Set<number>();
       while (chosen.size < itemCount) chosen.add(pick(weighted));
@@ -200,7 +208,7 @@ async function main() {
         const lineSum = Math.round(p.price * qty * 100) / 100;
         total = Math.round((total + lineSum) * 100) / 100;
         saleItems.push({ id: randomUUID(), saleId, productId: prod.id, quantity: d3(qty), priceAtSale: d2(p.price) });
-        movements.push({ id: randomUUID(), productId: prod.id, type: "OUT", quantity: d3(qty), reason: "продажа", userId: cashier.id, createdAt });
+        movements.push({ id: randomUUID(), productId: prod.id, type: "OUT", quantity: d3(qty), reason: "продажа", userId: shiftCashier.id, createdAt });
         soldByProduct.set(prod.id, (soldByProduct.get(prod.id) ?? 0) + qty);
       }
       const pm: PaymentMethod = rand() < 0.55 ? "CASH" : rand() < 0.78 ? "CARD" : "TRANSFER";
@@ -213,7 +221,7 @@ async function main() {
       }
       sales.push({
         id: saleId, storeId: store.id,
-        cashierId: rand() < 0.85 ? cashier.id : admin.id,
+        cashierId: shiftCashier.id,
         total: d2(total), paymentMethod: pm,
         cashGiven: cashGiven != null ? d2(cashGiven) : null,
         changeGiven: changeGiven != null ? d2(changeGiven) : null,
@@ -230,18 +238,18 @@ async function main() {
   for (const prod of products) {
     const sold = soldByProduct.get(prod.id) ?? 0;
     const initial = Math.round((Number(prod.stock) + sold) * 1000) / 1000;
-    movements.push({ id: randomUUID(), productId: prod.id, type: "IN", quantity: d3(initial), reason: "начальный приход", userId: admin.id, createdAt: start });
+    movements.push({ id: randomUUID(), productId: prod.id, type: "IN", quantity: d3(initial), reason: "начальный приход", userId: owner.id, createdAt: start });
   }
   // Пара честных списаний
   const tvorog = products[PRODUCTS.findIndex((p) => p.name === "Творог домашний")];
   const zelen = products[PRODUCTS.findIndex((p) => p.name === "Зелень (кинза), пучок")];
-  movements.push({ id: randomUUID(), productId: tvorog.id, type: "WRITEOFF", quantity: d3(1.2), reason: "истёк срок годности", userId: admin.id, createdAt: new Date(now.getTime() - 3 * dayMs) });
-  movements.push({ id: randomUUID(), productId: zelen.id, type: "WRITEOFF", quantity: d3(4), reason: "завяла", userId: admin.id, createdAt: new Date(now.getTime() - 1 * dayMs) });
+  movements.push({ id: randomUUID(), productId: tvorog.id, type: "WRITEOFF", quantity: d3(1.2), reason: "истёк срок годности", userId: owner.id, createdAt: new Date(now.getTime() - 3 * dayMs) });
+  movements.push({ id: randomUUID(), productId: zelen.id, type: "WRITEOFF", quantity: d3(4), reason: "завяла", userId: owner.id, createdAt: new Date(now.getTime() - 1 * dayMs) });
   await prisma.stockMovement.createMany({ data: movements });
 
   const totalRevenue = sales.reduce((s, x) => s + Number(x.total), 0);
   console.log(`Готово: ${products.length} товаров, ${sales.length} чеков на ${Math.round(totalRevenue)} ₽, ${saleItems.length} позиций, ${movements.length} движений.`);
-  console.log("Логины: gasan/owner123 (владелец), admin/admin123 (админ), cassa/kassa123 и zemfira/kassa123 (кассиры).");
+  console.log("Логины созданы: gasan (владелец+админ), zemfira и rita (кассиры). Пароли НЕ выводятся в консоль — сообщены отдельно.");
 }
 
 main()

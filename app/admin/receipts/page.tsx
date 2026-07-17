@@ -1,5 +1,4 @@
-import { redirect } from "next/navigation";
-import { requireRole } from "@/server/guard";
+import { requireStoreScope } from "@/server/guard";
 import { listReceiptsForDay } from "@/server/services/receipts";
 import { AppShell } from "@/components/AppShell";
 import { AdminTabs } from "../AdminTabs";
@@ -9,9 +8,8 @@ import { money0 } from "@/lib/format";
 export const dynamic = "force-dynamic";
 
 export default async function ReceiptsPage() {
-  const { user, db } = await requireRole("ADMIN", "OWNER");
-  if (!user.storeId) redirect("/owner");
-  const { rows, totals } = await listReceiptsForDay(db, user.storeId);
+  const { user, db, storeId } = await requireStoreScope("ADMIN", "OWNER");
+  const { rows, totals } = await listReceiptsForDay(db, storeId);
 
   return (
     <AppShell role={user.role} userName={user.name} active="admin">

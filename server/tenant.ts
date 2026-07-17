@@ -32,6 +32,7 @@ const TENANT_WHERE: Record<Prisma.ModelName, (orgId: string) => Where> = {
   StockMovement: (orgId) => ({ product: { store: { organizationId: orgId } } }),
   Sale: (orgId) => ({ store: { organizationId: orgId } }),
   SaleItem: (orgId) => ({ sale: { store: { organizationId: orgId } } }),
+  AiBriefing: (orgId) => ({ organizationId: orgId }),
 };
 
 // Скалярные внешние ключи, которые могут встретиться в data при create/update.

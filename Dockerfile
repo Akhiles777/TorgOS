@@ -20,7 +20,9 @@ COPY package.json package-lock.json ./
 # npm install, а не ci: у npm известный баг с кросс-платформенными optional-
 # зависимостями (@emnapi/* у Tailwind oxide) — на Linux ci падает на lockfile,
 # сгенерированном на macOS. install разрешает их корректно.
-RUN for i in 1 2 3 4 5; do npm install --no-audit --no-fund && break || { echo "retry $i"; sleep 10; }; done
+# --include=dev обязателен: в base стоит NODE_ENV=production, иначе npm пропустит
+# devDependencies (@tailwindcss/postcss, typescript), нужные для сборки.
+RUN for i in 1 2 3 4 5; do npm install --include=dev --no-audit --no-fund && break || { echo "retry $i"; sleep 10; }; done
 
 # ---------- сборка ----------
 FROM base AS builder

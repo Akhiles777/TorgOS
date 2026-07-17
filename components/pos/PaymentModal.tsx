@@ -31,13 +31,15 @@ export function PaymentModal({
   const canCash = method === "CASH" && given >= total;
   const canPay = method === "CASH" ? canCash : true;
 
-  // Быстрые суммы «под расчёт»: ближайшие круглые купюры
+  // Шпаргалка сдачи: реальные номиналы российских купюр, каждая — со сдачей
+  // с неё. Кассиру не нужно считать в уме — только глянуть и назвать вслух.
+  const BILLS = [100, 200, 500, 1000, 2000, 5000];
   const quick = useMemo(() => {
-    const opts = new Set<number>();
-    opts.add(Math.ceil(total));
-    for (const step of [50, 100, 500, 1000]) opts.add(Math.ceil(total / step) * step);
-    for (const bill of [100, 200, 500, 1000, 2000, 5000]) if (bill >= total) opts.add(bill);
-    return [...opts].sort((a, b) => a - b).slice(0, 5);
+    const opts: number[] = [];
+    const exact = Math.ceil(total * 100) / 100; // без сдачи — если сумма не круглая
+    if (Math.abs(exact - Math.round(exact)) > 0.001) opts.push(exact);
+    for (const bill of BILLS) if (bill >= total) opts.push(bill);
+    return opts.slice(0, 6);
   }, [total]);
 
   const pay = () => {
@@ -83,16 +85,26 @@ export function PaymentModal({
               placeholder="0"
               className="w-full h-16 px-4 text-4xl font-mono-nums tabular-nums text-center bg-paper border-2 border-line rounded-tag focus:border-ink"
             />
-            <div className="flex flex-wrap gap-2 mt-3">
-              {quick.map((q) => (
-                <button
-                  key={q}
-                  onClick={() => setCash(String(q))}
-                  className="h-10 px-4 rounded-tag border border-line bg-paper-2 font-mono-nums hover:border-ink"
-                >
-                  {money0(q)}
-                </button>
-              ))}
+            <p className="text-xs text-ink-soft mt-3 mb-1.5">Какой купюрой рассчитаться — сдача сразу видна:</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {quick.map((q) => {
+                const isExact = Math.abs(q - total) < 0.005;
+                const active = Math.abs(given - q) < 0.005;
+                return (
+                  <button
+                    key={q}
+                    onClick={() => setCash(String(q))}
+                    className={`min-h-[52px] px-3 py-1.5 rounded-tag border text-left transition-colors ${
+                      active ? "border-ink bg-ink text-paper" : "border-line bg-paper-2 hover:border-ink"
+                    }`}
+                  >
+                    <span className="block font-mono-nums font-semibold tabular-nums">{money0(q)} ₽</span>
+                    <span className={`block text-xs font-mono-nums tabular-nums ${active ? "text-paper/70" : "text-ink-soft"}`}>
+                      {isExact ? "без сдачи" : `сдача ${money0(q - total)} ₽`}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
 
             {/* Табло сдачи — крупно, кассир называет вслух */}

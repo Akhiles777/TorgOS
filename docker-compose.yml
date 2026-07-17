@@ -41,6 +41,8 @@ services:
       PORT: "3000"
       DATABASE_URL: "postgresql://${POSTGRES_USER:-torgos}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-redstore}?schema=public&connection_limit=10"
       AUTH_SECRET: ${AUTH_SECRET:?нужно задать AUTH_SECRET в .env}
+      ROUTERAI_API_KEY: ${ROUTERAI_API_KEY:-}
+      ROUTERAI_MODEL: ${ROUTERAI_MODEL:-anthropic/claude-sonnet-5}
     ports:
       - "${APP_PORT:-3000}:3000"
 

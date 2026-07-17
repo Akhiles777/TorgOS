@@ -1,9 +1,11 @@
+import { Suspense } from "react";
 import { requireRole } from "@/server/guard";
 import { ownerDashboard } from "@/server/services/analytics";
 import { AppShell } from "@/components/AppShell";
 import { money, money0, plural } from "@/lib/format";
 import { RevenueBars } from "./RevenueBars";
 import { InsightCard } from "./InsightCard";
+import { AiBriefingSection, AiBriefingSkeleton } from "./AiBriefingSection";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +52,11 @@ export default async function OwnerPage() {
           </div>
         )}
       </section>
+
+      {/* ИИ-сводка стримится отдельно: медленный/недоступный RouterAI не блокирует остальные цифры */}
+      <Suspense fallback={<AiBriefingSkeleton />}>
+        <AiBriefingSection db={db} organizationId={user.organizationId} dashboard={d} />
+      </Suspense>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <RankTable title="Топ товаров" subtitle="по выручке за период" rows={d.top} />

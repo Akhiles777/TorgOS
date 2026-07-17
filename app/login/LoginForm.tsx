@@ -13,10 +13,6 @@ export function LoginForm() {
       <Button type="submit" variant="stamp" size="lg" className="w-full" disabled={pending}>
         {pending ? "Входим…" : "Войти"}
       </Button>
-      <p className="text-xs text-ink-soft leading-relaxed pt-1">
-        Демо-доступы: <b>magomed / owner123</b> (владелец), <b>patimat / admin123</b> (админ),{" "}
-        <b>amina / kassa123</b> (касса).
-      </p>
     </form>
   );
 }

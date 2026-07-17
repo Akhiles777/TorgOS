@@ -42,13 +42,14 @@ enum PaymentMethod {
 }
 
 model Organization {
-  id        String   @id @default(cuid())
-  name      String
-  type      OrgType
-  plan      Plan     @default(TRIAL)
-  createdAt DateTime @default(now())
-  stores    Store[]
-  users     User[]
+  id         String      @id @default(cuid())
+  name       String
+  type       OrgType
+  plan       Plan        @default(TRIAL)
+  createdAt  DateTime    @default(now())
+  stores     Store[]
+  users      User[]
+  aiBriefing AiBriefing?
 }
 
 model Store {
@@ -153,6 +154,20 @@ model SaleItem {
   priceAtSale Decimal @db.Decimal(10, 2)
 
   @@index([productId])
+}
+
+// Кеш ИИ-сводки владельца: одна запись на организацию (кабинет владельца
+// агрегирует ВСЕ точки организации, поэтому ключ — organizationId, не storeId),
+// перегенерируется по TTL. Разделено с рекомендациями-правилами (Insight) —
+// эта сводка неточная/сгенерированная, правила остаются источником истины
+// и работают даже если ИИ недоступен.
+model AiBriefing {
+  id             String       @id @default(cuid())
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  content        String
+  model          String
+  generatedAt    DateTime     @default(now())
 }
 
 model Supplier {
