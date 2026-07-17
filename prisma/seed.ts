@@ -118,19 +118,25 @@ async function main() {
     prisma.user.create({
       data: {
         organizationId: org.id, role: "OWNER",
-        name: "Магомед Алиев", login: "magomed", passwordHash: hashSync("owner123", 10),
+        name: "Гасан Алункачев", login: "gasan", passwordHash: hashSync("owner123", 10),
       },
     }),
     prisma.user.create({
       data: {
         organizationId: org.id, storeId: store.id, role: "ADMIN",
-        name: "Патимат Алиева", login: "patimat", passwordHash: hashSync("admin123", 10),
+        name: "Алункачев Гасан", login: "admin", passwordHash: hashSync("admin123", 10),
       },
     }),
     prisma.user.create({
       data: {
         organizationId: org.id, storeId: store.id, role: "CASHIER",
-        name: "Амина Гаджиева", login: "amina", passwordHash: hashSync("kassa123", 10),
+        name: "Рита Юсупова", login: "cassa", passwordHash: hashSync("kassa123", 10),
+      },
+    }),
+    prisma.user.create({
+      data: {
+        organizationId: org.id, storeId: store.id, role: "CASHIER",
+        name: "Земфира Абдулаева", login: "cassa", passwordHash: hashSync("kassa123", 10),
       },
     }),
   ]);
@@ -235,7 +241,7 @@ async function main() {
 
   const totalRevenue = sales.reduce((s, x) => s + Number(x.total), 0);
   console.log(`Готово: ${products.length} товаров, ${sales.length} чеков на ${Math.round(totalRevenue)} ₽, ${saleItems.length} позиций, ${movements.length} движений.`);
-  console.log("Логины: magomed/owner123 (владелец), patimat/admin123 (админ), amina/kassa123 (кассир).");
+  console.log("Логины: gasan/owner123 (владелец), admin/admin123 (админ), cassa/kassa123 и zemfira/kassa123 (кассиры).");
 }
 
 main()

@@ -81,4 +81,26 @@ app.prepare().then(() => {
   server.listen(port, () => {
     console.log(`ТоргОС на http://localhost:${port} (WS /ws, ${dev ? "dev" : "prod"})`);
   });
+
+  // Плавная остановка: при SIGTERM/SIGINT (docker stop, деплой) даём серверу
+  // дожать текущие запросы и транзакции, закрываем WS и коннект к БД.
+  // Незавершённая продажа либо докатывается в БД, либо целиком откатывается —
+  // «полупродаж» не бывает (транзакция), поэтому данные остаются целыми.
+  let shuttingDown = false;
+  const shutdown = async (signal) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`\n${signal}: останавливаюсь аккуратно…`);
+    for (const room of rooms.values()) for (const ws of room) ws.close(1001, "server shutdown");
+    wss.close();
+    server.close(async () => {
+      await prisma.$disconnect().catch(() => {});
+      console.log("Остановлен. Данные сохранены.");
+      process.exit(0);
+    });
+    // Аварийный таймаут, если что-то зависло
+    setTimeout(() => { console.error("Форсированная остановка по таймауту"); process.exit(1); }, 10_000).unref();
+  };
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
 });

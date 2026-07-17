@@ -1,0 +1,69 @@
+# ТоргОС — продакшн-развёртывание.
+# Данные БД — в именованном томе pgdata (переживает пересоздание контейнеров).
+# Бэкапы — в томе pgbackups (можно смонтировать на отдельный диск, см. README).
+#
+# Запуск:  docker compose up -d --build
+# Логи:    docker compose logs -f app
+# Стоп:    docker compose down          (данные сохраняются в томах)
+
+services:
+  db:
+    image: postgres:16-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-torgos}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?нужно задать POSTGRES_PASSWORD в .env}
+      POSTGRES_DB: ${POSTGRES_DB:-redstore}
+      # Контрольная сумма страниц — раннее обнаружение повреждения данных на диске
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-torgos} -d ${POSTGRES_DB:-redstore}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    # Наружу порт не публикуем — БД доступна только приложению и бэкапу
+    expose:
+      - "5432"
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      DATABASE_URL: "postgresql://${POSTGRES_USER:-torgos}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-redstore}?schema=public&connection_limit=10"
+      AUTH_SECRET: ${AUTH_SECRET:?нужно задать AUTH_SECRET в .env}
+    ports:
+      - "${APP_PORT:-3000}:3000"
+
+  backup:
+    image: postgres:16-bookworm
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_USER: ${POSTGRES_USER:-torgos}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-redstore}
+      BACKUP_INTERVAL: ${BACKUP_INTERVAL:-86400}
+      BACKUP_KEEP: ${BACKUP_KEEP:-14}
+    volumes:
+      - pgbackups:/backups
+      - ./docker/backup.sh:/usr/local/bin/backup.sh:ro
+    entrypoint: ["sh", "/usr/local/bin/backup.sh"]
+
+volumes:
+  pgdata:
+    driver: local
+  pgbackups:
+    driver: local

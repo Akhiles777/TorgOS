@@ -83,6 +83,7 @@ export async function commitSale(
 
     for (const p of products) {
       const q = new Prisma.Decimal(merged.get(p.id)!.toFixed(3));
+      if (p.stock.lessThan(q)) throw new PosError(`Недостаточно остатка: ${p.name}`);
       const price = p.price;
       total = total.plus(price.times(q));
       items.push({ productId: p.id, quantity: q, priceAtSale: price });
