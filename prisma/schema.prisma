@@ -1,0 +1,167 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OrgType {
+  RETAIL
+  HORECA
+}
+
+enum Plan {
+  TRIAL
+  BASIC
+  PRO
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  CASHIER
+}
+
+enum Unit {
+  PCS
+  KG
+}
+
+enum MovementType {
+  IN
+  OUT
+  WRITEOFF
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  TRANSFER
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  type      OrgType
+  plan      Plan     @default(TRIAL)
+  createdAt DateTime @default(now())
+  stores    Store[]
+  users     User[]
+}
+
+model Store {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  address        String
+  users          User[]
+  products       Product[]
+  sales          Sale[]
+  suppliers      Supplier[]
+
+  @@index([organizationId])
+}
+
+model User {
+  id             String          @id @default(cuid())
+  organizationId String
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  storeId        String?
+  store          Store?          @relation(fields: [storeId], references: [id])
+  role           Role
+  name           String
+  login          String          @unique
+  passwordHash   String
+  createdAt      DateTime        @default(now())
+  sessions       Session[]
+  sales          Sale[]
+  movements      StockMovement[]
+
+  @@index([organizationId])
+}
+
+// id — sha256-хэш токена; сам токен живёт только в cookie
+model Session {
+  id        String   @id
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+}
+
+model Product {
+  id        String          @id @default(cuid())
+  storeId   String
+  store     Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  barcode   String?
+  name      String
+  price     Decimal         @db.Decimal(10, 2)
+  costPrice Decimal         @db.Decimal(10, 2)
+  unit      Unit            @default(PCS)
+  category  String
+  expiry    DateTime?
+  stock     Decimal         @default(0) @db.Decimal(10, 3)
+  isActive  Boolean         @default(true)
+  createdAt DateTime        @default(now())
+  movements StockMovement[]
+  saleItems SaleItem[]
+
+  @@unique([storeId, barcode])
+  @@index([storeId, category])
+}
+
+model StockMovement {
+  id        String       @id @default(cuid())
+  productId String
+  product   Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  type      MovementType
+  quantity  Decimal      @db.Decimal(10, 3)
+  reason    String?
+  userId    String
+  user      User         @relation(fields: [userId], references: [id])
+  createdAt DateTime     @default(now())
+
+  @@index([productId, createdAt])
+}
+
+model Sale {
+  id            String        @id @default(cuid())
+  number        Int           @default(autoincrement())
+  storeId       String
+  store         Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  cashierId     String
+  cashier       User          @relation(fields: [cashierId], references: [id])
+  total         Decimal       @db.Decimal(10, 2)
+  paymentMethod PaymentMethod
+  cashGiven     Decimal?      @db.Decimal(10, 2)
+  changeGiven   Decimal?      @db.Decimal(10, 2)
+  createdAt     DateTime      @default(now())
+  items         SaleItem[]
+
+  @@index([storeId, createdAt])
+}
+
+model SaleItem {
+  id          String  @id @default(cuid())
+  saleId      String
+  sale        Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product @relation(fields: [productId], references: [id])
+  quantity    Decimal @db.Decimal(10, 3)
+  priceAtSale Decimal @db.Decimal(10, 2)
+
+  @@index([productId])
+}
+
+model Supplier {
+  id      String  @id @default(cuid())
+  storeId String
+  store   Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name    String
+  phone   String?
+  notes   String?
+
+  @@index([storeId])
+}
