@@ -229,6 +229,12 @@ export function PosScreen({ initialProducts, cashierName }: { initialProducts: P
           />
           <StatusDot status={socketStatus} />
           <span className="text-sm text-ink-soft hidden sm:block">{cashierName}</span>
+          <a
+            href="/logout"
+            className="h-9 px-3 grid place-items-center rounded-tag border border-line text-ink-soft text-sm hover:text-stamp hover:border-stamp transition-colors"
+          >
+            Выйти
+          </a>
         </header>
 
         <div className="flex-1 min-h-0">

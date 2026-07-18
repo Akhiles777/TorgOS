@@ -175,11 +175,11 @@ async function main() {
   }));
   await prisma.product.createMany({ data: products });
 
-  console.log("Генерирую 14 дней продаж…");
-  const weighted: number[] = [];
-  PRODUCTS.forEach((p, i) => { for (let w = 0; w < p.weight; w++) weighted.push(i); });
-  // Утренний и вечерний пики
-  const hours = [8, 8, 9, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 15, 15, 16, 16, 17, 17, 17, 18, 18, 18, 19, 19, 19, 20, 20];
+  // SEED_NO_HISTORY=1 — режим для реального продакшена: организация, точка,
+  // сотрудники и каталог товаров создаются как обычно, но БЕЗ 14 дней
+  // выдуманных продаж. Кабинет владельца и «Рекомендации» стартуют честно
+  // с нуля и наполняются по мере настоящих чеков.
+  const noHistory = !!process.env.SEED_NO_HISTORY;
 
   type SaleRow = { id: string; storeId: string; cashierId: string; total: Prisma.Decimal; paymentMethod: PaymentMethod; cashGiven: Prisma.Decimal | null; changeGiven: Prisma.Decimal | null; createdAt: Date };
   const sales: SaleRow[] = [];
@@ -187,52 +187,60 @@ async function main() {
   const movements: { id: string; productId: string; type: MovementType; quantity: Prisma.Decimal; reason: string | null; userId: string; createdAt: Date }[] = [];
   const soldByProduct = new Map<string, number>();
 
-  for (let dayOffset = 13; dayOffset >= 0; dayOffset--) {
-    const receipts = 28 + Math.floor(rand() * 25);
-    for (let r = 0; r < receipts; r++) {
-      const day = new Date(now.getTime() - dayOffset * dayMs);
-      const createdAt = new Date(day.getFullYear(), day.getMonth(), day.getDate(), pick(hours), Math.floor(rand() * 60), Math.floor(rand() * 60));
-      if (createdAt > now) continue;
-      // Смена — весь чек пробивает одна кассирша (реалистичнее, чем случайный
-      // кассир на каждую позицию), Гасан изредка подменяет на кассе.
-      const shiftCashier = rand() < 0.9 ? pick(cashiers) : owner;
-      const itemCount = 1 + Math.floor(rand() * rand() * 6);
-      const chosen = new Set<number>();
-      while (chosen.size < itemCount) chosen.add(pick(weighted));
-      let total = 0;
-      const saleId = randomUUID();
-      for (const idx of chosen) {
-        const p = PRODUCTS[idx];
-        const prod = products[idx];
-        const qty = p.unit === "KG" ? Math.round((0.2 + rand() * 1.3) * 200) / 200 : 1 + Math.floor(rand() * 3);
-        const lineSum = Math.round(p.price * qty * 100) / 100;
-        total = Math.round((total + lineSum) * 100) / 100;
-        saleItems.push({ id: randomUUID(), saleId, productId: prod.id, quantity: d3(qty), priceAtSale: d2(p.price) });
-        movements.push({ id: randomUUID(), productId: prod.id, type: "OUT", quantity: d3(qty), reason: "продажа", userId: shiftCashier.id, createdAt });
-        soldByProduct.set(prod.id, (soldByProduct.get(prod.id) ?? 0) + qty);
+  if (!noHistory) {
+    console.log("Генерирую 14 дней продаж…");
+    const weighted: number[] = [];
+    PRODUCTS.forEach((p, i) => { for (let w = 0; w < p.weight; w++) weighted.push(i); });
+    // Утренний и вечерний пики
+    const hours = [8, 8, 9, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 15, 15, 16, 16, 17, 17, 17, 18, 18, 18, 19, 19, 19, 20, 20];
+
+    for (let dayOffset = 13; dayOffset >= 0; dayOffset--) {
+      const receipts = 28 + Math.floor(rand() * 25);
+      for (let r = 0; r < receipts; r++) {
+        const day = new Date(now.getTime() - dayOffset * dayMs);
+        const createdAt = new Date(day.getFullYear(), day.getMonth(), day.getDate(), pick(hours), Math.floor(rand() * 60), Math.floor(rand() * 60));
+        if (createdAt > now) continue;
+        // Смена — весь чек пробивает одна кассирша (реалистичнее, чем случайный
+        // кассир на каждую позицию), Гасан изредка подменяет на кассе.
+        const shiftCashier = rand() < 0.9 ? pick(cashiers) : owner;
+        const itemCount = 1 + Math.floor(rand() * rand() * 6);
+        const chosen = new Set<number>();
+        while (chosen.size < itemCount) chosen.add(pick(weighted));
+        let total = 0;
+        const saleId = randomUUID();
+        for (const idx of chosen) {
+          const p = PRODUCTS[idx];
+          const prod = products[idx];
+          const qty = p.unit === "KG" ? Math.round((0.2 + rand() * 1.3) * 200) / 200 : 1 + Math.floor(rand() * 3);
+          const lineSum = Math.round(p.price * qty * 100) / 100;
+          total = Math.round((total + lineSum) * 100) / 100;
+          saleItems.push({ id: randomUUID(), saleId, productId: prod.id, quantity: d3(qty), priceAtSale: d2(p.price) });
+          movements.push({ id: randomUUID(), productId: prod.id, type: "OUT", quantity: d3(qty), reason: "продажа", userId: shiftCashier.id, createdAt });
+          soldByProduct.set(prod.id, (soldByProduct.get(prod.id) ?? 0) + qty);
+        }
+        // Карту не принимаем — только наличные и перевод (реальный способ оплаты магазина)
+        const pm: PaymentMethod = rand() < 0.65 ? "CASH" : "TRANSFER";
+        let cashGiven: number | null = null;
+        let changeGiven: number | null = null;
+        if (pm === "CASH") {
+          cashGiven = Math.ceil(total / 100) * 100;
+          if (cashGiven - total > 60 && rand() < 0.5) cashGiven = Math.ceil(total / 50) * 50;
+          changeGiven = Math.round((cashGiven - total) * 100) / 100;
+        }
+        sales.push({
+          id: saleId, storeId: store.id,
+          cashierId: shiftCashier.id,
+          total: d2(total), paymentMethod: pm,
+          cashGiven: cashGiven != null ? d2(cashGiven) : null,
+          changeGiven: changeGiven != null ? d2(changeGiven) : null,
+          createdAt,
+        });
       }
-      // Карту не принимаем — только наличные и перевод (реальный способ оплаты магазина)
-      const pm: PaymentMethod = rand() < 0.65 ? "CASH" : "TRANSFER";
-      let cashGiven: number | null = null;
-      let changeGiven: number | null = null;
-      if (pm === "CASH") {
-        cashGiven = Math.ceil(total / 100) * 100;
-        if (cashGiven - total > 60 && rand() < 0.5) cashGiven = Math.ceil(total / 50) * 50;
-        changeGiven = Math.round((cashGiven - total) * 100) / 100;
-      }
-      sales.push({
-        id: saleId, storeId: store.id,
-        cashierId: shiftCashier.id,
-        total: d2(total), paymentMethod: pm,
-        cashGiven: cashGiven != null ? d2(cashGiven) : null,
-        changeGiven: changeGiven != null ? d2(changeGiven) : null,
-        createdAt,
-      });
     }
+    sales.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    await prisma.sale.createMany({ data: sales });
+    await prisma.saleItem.createMany({ data: saleItems });
   }
-  sales.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-  await prisma.sale.createMany({ data: sales });
-  await prisma.saleItem.createMany({ data: saleItems });
 
   console.log("Записываю движения товара…");
   const start = new Date(now.getTime() - 14 * dayMs);
@@ -241,15 +249,21 @@ async function main() {
     const initial = Math.round((Number(prod.stock) + sold) * 1000) / 1000;
     movements.push({ id: randomUUID(), productId: prod.id, type: "IN", quantity: d3(initial), reason: "начальный приход", userId: owner.id, createdAt: start });
   }
-  // Пара честных списаний
-  const tvorog = products[PRODUCTS.findIndex((p) => p.name === "Творог домашний")];
-  const zelen = products[PRODUCTS.findIndex((p) => p.name === "Зелень (кинза), пучок")];
-  movements.push({ id: randomUUID(), productId: tvorog.id, type: "WRITEOFF", quantity: d3(1.2), reason: "истёк срок годности", userId: owner.id, createdAt: new Date(now.getTime() - 3 * dayMs) });
-  movements.push({ id: randomUUID(), productId: zelen.id, type: "WRITEOFF", quantity: d3(4), reason: "завяла", userId: owner.id, createdAt: new Date(now.getTime() - 1 * dayMs) });
+  if (!noHistory) {
+    // Пара честных списаний — только для демо-режима с историей
+    const tvorog = products[PRODUCTS.findIndex((p) => p.name === "Творог домашний")];
+    const zelen = products[PRODUCTS.findIndex((p) => p.name === "Зелень (кинза), пучок")];
+    movements.push({ id: randomUUID(), productId: tvorog.id, type: "WRITEOFF", quantity: d3(1.2), reason: "истёк срок годности", userId: owner.id, createdAt: new Date(now.getTime() - 3 * dayMs) });
+    movements.push({ id: randomUUID(), productId: zelen.id, type: "WRITEOFF", quantity: d3(4), reason: "завяла", userId: owner.id, createdAt: new Date(now.getTime() - 1 * dayMs) });
+  }
   await prisma.stockMovement.createMany({ data: movements });
 
   const totalRevenue = sales.reduce((s, x) => s + Number(x.total), 0);
-  console.log(`Готово: ${products.length} товаров, ${sales.length} чеков на ${Math.round(totalRevenue)} ₽, ${saleItems.length} позиций, ${movements.length} движений.`);
+  if (noHistory) {
+    console.log(`Готово (без истории): ${products.length} товаров, 0 продаж — чистый старт.`);
+  } else {
+    console.log(`Готово: ${products.length} товаров, ${sales.length} чеков на ${Math.round(totalRevenue)} ₽, ${saleItems.length} позиций, ${movements.length} движений.`);
+  }
   console.log("Логины созданы: gasan (владелец+админ), zemfira и rita (кассиры). Пароли НЕ выводятся в консоль — сообщены отдельно.");
 }
 
