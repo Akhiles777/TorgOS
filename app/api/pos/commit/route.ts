@@ -1,15 +1,18 @@
 import { NextResponse } from "next/server";
 import { requireApi, AuthError } from "@/server/guard";
 import { commitSale, PosError, type CommitPayload } from "@/server/services/pos";
+import { getCurrentShift } from "@/server/services/shift";
 import { broadcastStock } from "@/server/realtime";
 
 export async function POST(req: Request) {
   try {
-    const { user, db } = await requireApi("CASHIER", "ADMIN");
+    const { user, db } = await requireApi("OWNER", "ADMIN", "CASHIER");
     if (!user.storeId) throw new PosError("У пользователя не задана точка");
     const body = (await req.json()) as CommitPayload;
 
-    const result = await commitSale(db, user.storeId, user.id, body);
+    // Кто на смене определяем на сервере (клиенту не доверяем атрибуцию).
+    const shift = await getCurrentShift(db, user.storeId);
+    const result = await commitSale(db, user.storeId, user.id, body, shift?.employee.id ?? null);
     // Рассылаем новые остатки на все открытые кассы этой точки
     broadcastStock(user.storeId, result.stockUpdates, result.number);
 

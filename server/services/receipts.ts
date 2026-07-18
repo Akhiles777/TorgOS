@@ -27,13 +27,15 @@ export async function listReceiptsForDay(db: TenantDb, storeId: string, day?: Da
     select: {
       id: true, number: true, total: true, paymentMethod: true, createdAt: true,
       cashier: { select: { name: true } },
+      employee: { select: { name: true } },
       items: { select: { quantity: true, priceAtSale: true, product: { select: { name: true, unit: true } } } },
     },
   });
 
   const rows: ReceiptRow[] = sales.map((s) => ({
     id: s.id, number: s.number, total: toNum(s.total), paymentMethod: s.paymentMethod,
-    cashier: s.cashier.name, createdAt: s.createdAt.toISOString(), itemCount: s.items.length,
+    // Показываем, кто был на смене; если смена не выбиралась — логин-аккаунт.
+    cashier: s.employee?.name ?? s.cashier.name, createdAt: s.createdAt.toISOString(), itemCount: s.items.length,
     items: s.items.map((i) => ({ name: i.product.name, quantity: toNum(i.quantity), unit: i.product.unit, priceAtSale: toNum(i.priceAtSale) })),
   }));
 

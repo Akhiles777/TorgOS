@@ -5,10 +5,35 @@ import {
   createProduct, updateProduct, setActive, moveStock, ProductError, type ProductInput,
 } from "@/server/services/products";
 import { createStaff, StaffError } from "@/server/services/receipts";
+import { createEmployee, deactivateEmployee, ShiftError } from "@/server/services/shift";
 import { parseRuNumber } from "@/lib/format";
 import type { MovementType, Role, Unit } from "@prisma/client";
 
 type Result = { ok: true } | { ok: false; error: string };
+
+export async function createEmployeeAction(_prev: unknown, fd: FormData): Promise<Result> {
+  try {
+    const { db, storeId } = await requireApiStoreScope("ADMIN", "OWNER");
+    await createEmployee(db, storeId, String(fd.get("name") ?? ""));
+    revalidatePath("/admin/staff");
+    return { ok: true };
+  } catch (e) {
+    if (e instanceof ShiftError || e instanceof AuthError) return { ok: false, error: e.message };
+    console.error(e);
+    return { ok: false, error: "Не удалось добавить сотрудника смены" };
+  }
+}
+
+export async function deactivateEmployeeAction(id: string): Promise<Result> {
+  try {
+    const { db } = await requireApi("ADMIN", "OWNER");
+    await deactivateEmployee(db, id);
+    revalidatePath("/admin/staff");
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "Не удалось убрать сотрудника" };
+  }
+}
 
 function readProduct(fd: FormData): ProductInput {
   return {

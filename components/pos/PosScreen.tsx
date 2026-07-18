@@ -7,6 +7,7 @@ import { PaymentModal } from "./PaymentModal";
 import { useStockSocket } from "./useStockSocket";
 import { money0 } from "@/lib/format";
 import { logoutAction } from "@/app/logout/action";
+import { startShiftAction } from "@/app/pos/actions";
 import type { StockUpdate } from "@/server/realtime";
 import type { CartLine, PaymentMethod, PosProduct } from "./types";
 
@@ -20,7 +21,19 @@ type Mode =
 let keyCounter = 0;
 const nextKey = () => `l${++keyCounter}`;
 
-export function PosScreen({ initialProducts, cashierName }: { initialProducts: PosProduct[]; cashierName: string }) {
+type ShiftEmployee = { id: string; name: string };
+
+export function PosScreen({
+  initialProducts,
+  accountName,
+  employees,
+  currentShift,
+}: {
+  initialProducts: PosProduct[];
+  accountName: string;
+  employees: ShiftEmployee[];
+  currentShift: ShiftEmployee | null;
+}) {
   const [products] = useState(initialProducts);
   const [stock, setStock] = useState<Record<string, number>>(() =>
     Object.fromEntries(initialProducts.map((p) => [p.id, p.stock])),
@@ -31,6 +44,9 @@ export function PosScreen({ initialProducts, cashierName }: { initialProducts: P
   const [search, setSearch] = useState("");
   const [tearing, setTearing] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [shift, setShift] = useState<ShiftEmployee | null>(currentShift);
+  // Пикер смены открыт, если есть сотрудники, но никто ещё не выбран на день.
+  const [pickingShift, setPickingShift] = useState(employees.length > 0 && !currentShift);
 
   const scannerRef = useRef<HTMLInputElement>(null);
   const scanBuf = useRef("");
@@ -59,13 +75,27 @@ export function PosScreen({ initialProducts, cashierName }: { initialProducts: P
     flashTimer.current = setTimeout(() => setFlash(null), 1600);
   }, []);
 
-  // Держим скрытый инпут сканера в фокусе, пока нет модалок и активного поля ввода
+  const [shiftBusy, setShiftBusy] = useState(false);
+  const chooseShift = useCallback(async (emp: ShiftEmployee) => {
+    setShiftBusy(true);
+    const res = await startShiftAction(emp.id);
+    setShiftBusy(false);
+    if (res.ok) {
+      setShift(res.employee);
+      setPickingShift(false);
+      showFlash({ kind: "add", text: `Смена: ${res.employee.name}` });
+    } else {
+      showFlash({ kind: "error", text: res.error });
+    }
+  }, [showFlash]);
+
+  // Держим скрытый инпут сканера в фокусе, пока нет модалок/пикера смены и активного поля ввода
   const refocus = useCallback(() => {
-    if (modalOpen) return;
+    if (modalOpen || pickingShift) return;
     const active = document.activeElement;
     if (active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA") && active !== scannerRef.current) return;
     scannerRef.current?.focus();
-  }, [modalOpen]);
+  }, [modalOpen, pickingShift]);
 
   useEffect(() => {
     refocus();
@@ -229,7 +259,19 @@ export function PosScreen({ initialProducts, cashierName }: { initialProducts: P
             className="flex-1 h-11 px-3 bg-paper border border-line rounded-tag focus:border-ink"
           />
           <StatusDot status={socketStatus} />
-          <span className="text-sm text-ink-soft hidden sm:block">{cashierName}</span>
+          {/* Кто на смене — тап открывает пикер (пересменка среди дня) */}
+          {employees.length > 0 && (
+            <button
+              onClick={() => setPickingShift(true)}
+              className="h-9 px-3 inline-flex items-center gap-1.5 rounded-tag border border-line text-sm hover:border-ink transition-colors"
+              title="Сменить, кто на смене"
+            >
+              <span className="text-ink-soft hidden sm:inline">Смена:</span>
+              <span className="font-medium">{shift ? shift.name : "выбрать"}</span>
+              <span className="text-ink-soft">⟳</span>
+            </button>
+          )}
+          <span className="text-sm text-ink-soft hidden lg:block">{accountName}</span>
           <form action={logoutAction}>
             <button
               type="submit"
@@ -270,6 +312,39 @@ export function PosScreen({ initialProducts, cashierName }: { initialProducts: P
         >
           {flash.kind === "add" ? "✓ " : "✕ "}
           {flash.text}
+        </div>
+      )}
+
+      {/* Пикер смены: раз в сутки (после 07:00 МСК) касса спрашивает, кто заступил.
+          Одним тапом. Пока никто не выбран — оверлей, чтобы продажи не ушли «в никуда». */}
+      {pickingShift && (
+        <div className="fixed inset-0 z-[60] bg-ink/50 grid place-items-center p-4">
+          <div className="bg-paper rounded-tag border border-line shadow-2xl p-6 w-[min(94vw,460px)]">
+            <h2 className="text-2xl font-semibold text-center">Кто на смене?</h2>
+            <p className="text-ink-soft text-sm text-center mt-1 mb-5">Нажмите своё имя — продажи запишутся на вас.</p>
+            <div className="grid gap-2.5">
+              {employees.map((e) => (
+                <button
+                  key={e.id}
+                  onClick={() => chooseShift(e)}
+                  disabled={shiftBusy}
+                  className={`min-h-16 px-5 rounded-tag border-2 text-xl font-semibold transition active:scale-[0.98] disabled:opacity-50 ${
+                    shift?.id === e.id ? "border-fresh bg-fresh/10 text-fresh" : "border-line bg-paper-2 hover:border-ink"
+                  }`}
+                >
+                  {e.name}
+                </button>
+              ))}
+            </div>
+            {shift && (
+              <button
+                onClick={() => setPickingShift(false)}
+                className="w-full mt-4 h-11 rounded-tag border border-line text-ink-soft hover:border-ink"
+              >
+                Отмена
+              </button>
+            )}
+          </div>
         </div>
       )}
 

@@ -62,8 +62,40 @@ model Store {
   products       Product[]
   sales          Sale[]
   suppliers      Supplier[]
+  employees      Employee[]
+  shifts         Shift[]
 
   @@index([organizationId])
+}
+
+// Сотрудник смены — тот, кто физически стоит на кассе (Земфира, Рита…).
+// НЕ логин-аккаунт: касса работает под одной учёткой, а «кто на смене»
+// выбирается одним тапом. Продажи атрибутируются на этого сотрудника.
+model Employee {
+  id        String   @id @default(cuid())
+  storeId   String
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  shifts    Shift[]
+  sales     Sale[]
+
+  @@index([storeId])
+}
+
+// Смена — кто выбран «за управлением» в конкретный кассовый день.
+// Кассовый день считается по границе 07:00 МСК (shiftDay = "YYYY-MM-DD").
+model Shift {
+  id         String   @id @default(cuid())
+  storeId    String
+  store      Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  shiftDay   String
+  createdAt  DateTime @default(now())
+
+  @@index([storeId, shiftDay])
 }
 
 model User {
@@ -134,6 +166,10 @@ model Sale {
   store         Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
   cashierId     String
   cashier       User          @relation(fields: [cashierId], references: [id])
+  // Сотрудник смены, на которого записана продажа (кто был «за управлением»).
+  // Nullable: старые чеки и продажи без выбранной смены.
+  employeeId    String?
+  employee      Employee?     @relation(fields: [employeeId], references: [id])
   total         Decimal       @db.Decimal(10, 2)
   paymentMethod PaymentMethod
   cashGiven     Decimal?      @db.Decimal(10, 2)
@@ -142,6 +178,7 @@ model Sale {
   items         SaleItem[]
 
   @@index([storeId, createdAt])
+  @@index([employeeId])
 }
 
 model SaleItem {

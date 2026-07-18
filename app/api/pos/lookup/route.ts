@@ -4,7 +4,7 @@ import { findByBarcode } from "@/server/services/pos";
 
 export async function GET(req: Request) {
   try {
-    const { user, db } = await requireApi("CASHIER", "ADMIN");
+    const { user, db } = await requireApi("OWNER", "ADMIN", "CASHIER");
     if (!user.storeId) return NextResponse.json({ error: "Нет точки" }, { status: 400 });
     const barcode = new URL(req.url).searchParams.get("barcode")?.trim() ?? "";
     if (!barcode) return NextResponse.json({ product: null });

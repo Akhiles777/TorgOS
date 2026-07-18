@@ -37,8 +37,8 @@ export function RegisterForm() {
 
       <fieldset className="space-y-3">
         <legend className="text-sm font-semibold text-ink-soft uppercase tracking-wide mb-1">Владелец</legend>
-        <Field label="Ваше имя" name="ownerName" placeholder="Магомед Алиев" required />
-        <Field label="Логин" name="login" placeholder="magomed" autoComplete="username" required />
+        <Field label="Ваше имя" name="ownerName" placeholder="Алункачев Гасан" required />
+        <Field label="Логин" name="login" placeholder="gasan" autoComplete="username" required />
         <Field label="Пароль" name="password" type="password" autoComplete="new-password" placeholder="минимум 6 символов" required />
       </fieldset>
 

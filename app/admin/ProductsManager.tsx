@@ -35,14 +35,14 @@ export function ProductsManager({ products, filter, query }: { products: Product
 
   return (
     <div>
-      <div className="flex flex-wrap items-center gap-3 mb-4">
-        <h1 className="text-xl font-semibold mr-auto">Товары <span className="text-ink-soft font-normal">· {products.length}</span></h1>
-        <form onSubmit={submitSearch}>
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-4">
+        <h1 className="text-xl font-semibold w-full sm:w-auto sm:mr-auto">Товары <span className="text-ink-soft font-normal">· {products.length}</span></h1>
+        <form onSubmit={submitSearch} className="flex-1 sm:flex-none min-w-0">
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Поиск / штрихкод…"
-            className="h-10 px-3 bg-paper border border-line rounded-tag w-52 focus:border-ink"
+            className="h-10 px-3 bg-paper border border-line rounded-tag w-full sm:w-52 focus:border-ink"
           />
         </form>
         <Button variant="stamp" onClick={() => setEditing("new")}>+ Товар</Button>
@@ -63,50 +63,84 @@ export function ProductsManager({ products, filter, query }: { products: Product
       {products.length === 0 ? (
         <p className="text-ink-soft py-10 text-center bg-paper-2 border border-line rounded-tag">Ничего не найдено по этому фильтру.</p>
       ) : (
-        <div className="overflow-x-auto border border-line rounded-tag">
-          <table className="w-full text-sm min-w-[720px]">
-            <thead>
-              <tr className="bg-paper-2 text-ink-soft text-left">
-                <th className="px-3 py-2 font-medium">Товар</th>
-                <th className="px-3 py-2 font-medium">Категория</th>
-                <th className="px-3 py-2 font-medium text-right">Цена</th>
-                <th className="px-3 py-2 font-medium text-right">Себест.</th>
-                <th className="px-3 py-2 font-medium text-right">Наценка</th>
-                <th className="px-3 py-2 font-medium text-right">Остаток</th>
-                <th className="px-3 py-2 font-medium text-right">Действия</th>
-              </tr>
-            </thead>
-            <tbody>
-              {products.map((p) => {
-                const low = p.stock <= (p.unit === "KG" ? 1 : 3);
-                return (
-                  <tr key={p.id} className="border-t border-line hover:bg-paper-2/50">
-                    <td className="px-3 py-2">
-                      <div className="font-medium">{p.name}</div>
-                      <div className="font-mono-nums text-xs text-ink-soft">{p.barcode ?? "без штрихкода"}</div>
-                    </td>
-                    <td className="px-3 py-2 text-ink-soft">{p.category}</td>
-                    <td className="px-3 py-2 text-right font-mono-nums">{money0(p.price)}</td>
-                    <td className="px-3 py-2 text-right font-mono-nums text-ink-soft">{money0(p.costPrice)}</td>
-                    <td className="px-3 py-2 text-right font-mono-nums">
-                      <span className={p.marginPct < 15 ? "text-stamp" : "text-fresh"}>{p.marginPct}%</span>
-                    </td>
-                    <td className="px-3 py-2 text-right font-mono-nums">
-                      <span className={low ? "text-warn font-semibold" : ""}>{qty(p.stock, p.unit)} {unitLabel(p.unit)}</span>
-                    </td>
-                    <td className="px-3 py-2">
-                      <div className="flex gap-1 justify-end">
-                        <IconBtn onClick={() => setMoving(p)} title="Приход / списание">±</IconBtn>
-                        <IconBtn onClick={() => setEditing(p)} title="Редактировать">✎</IconBtn>
-                        {p.barcode && <IconBtn onClick={() => setPrinting(p)} title="Печать штрихкода">▤</IconBtn>}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <>
+          {/* Десктоп/планшет — таблица (без изменений) */}
+          <div className="hidden sm:block overflow-x-auto border border-line rounded-tag">
+            <table className="w-full text-sm min-w-[720px]">
+              <thead>
+                <tr className="bg-paper-2 text-ink-soft text-left">
+                  <th className="px-3 py-2 font-medium">Товар</th>
+                  <th className="px-3 py-2 font-medium">Категория</th>
+                  <th className="px-3 py-2 font-medium text-right">Цена</th>
+                  <th className="px-3 py-2 font-medium text-right">Себест.</th>
+                  <th className="px-3 py-2 font-medium text-right">Наценка</th>
+                  <th className="px-3 py-2 font-medium text-right">Остаток</th>
+                  <th className="px-3 py-2 font-medium text-right">Действия</th>
+                </tr>
+              </thead>
+              <tbody>
+                {products.map((p) => {
+                  const low = p.stock <= (p.unit === "KG" ? 1 : 3);
+                  return (
+                    <tr key={p.id} className="border-t border-line hover:bg-paper-2/50">
+                      <td className="px-3 py-2">
+                        <div className="font-medium">{p.name}</div>
+                        <div className="font-mono-nums text-xs text-ink-soft">{p.barcode ?? "без штрихкода"}</div>
+                      </td>
+                      <td className="px-3 py-2 text-ink-soft">{p.category}</td>
+                      <td className="px-3 py-2 text-right font-mono-nums">{money0(p.price)}</td>
+                      <td className="px-3 py-2 text-right font-mono-nums text-ink-soft">{money0(p.costPrice)}</td>
+                      <td className="px-3 py-2 text-right font-mono-nums">
+                        <span className={p.marginPct < 15 ? "text-stamp" : "text-fresh"}>{p.marginPct}%</span>
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono-nums">
+                        <span className={low ? "text-warn font-semibold" : ""}>{qty(p.stock, p.unit)} {unitLabel(p.unit)}</span>
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="flex gap-1 justify-end">
+                          <IconBtn onClick={() => setMoving(p)} title="Приход / списание">±</IconBtn>
+                          <IconBtn onClick={() => setEditing(p)} title="Редактировать">✎</IconBtn>
+                          {p.barcode && <IconBtn onClick={() => setPrinting(p)} title="Печать штрихкода">▤</IconBtn>}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Мобильный — карточки вместо горизонтального скролла таблицы */}
+          <div className="sm:hidden space-y-2">
+            {products.map((p) => {
+              const low = p.stock <= (p.unit === "KG" ? 1 : 3);
+              return (
+                <div key={p.id} className="border border-line rounded-tag bg-paper-2 p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="font-medium leading-tight">{p.name}</div>
+                      <div className="font-mono-nums text-xs text-ink-soft mt-0.5">{p.category} · {p.barcode ?? "без штрихкода"}</div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="font-mono-nums font-semibold">{money0(p.price)} ₽</div>
+                      <div className={`font-mono-nums text-xs ${p.marginPct < 15 ? "text-stamp" : "text-fresh"}`}>наценка {p.marginPct}%</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between mt-2.5">
+                    <span className={`font-mono-nums text-sm ${low ? "text-warn font-semibold" : "text-ink-soft"}`}>
+                      Остаток: {qty(p.stock, p.unit)} {unitLabel(p.unit)}
+                    </span>
+                    <div className="flex gap-1.5">
+                      <IconBtn onClick={() => setMoving(p)} title="Приход / списание">±</IconBtn>
+                      <IconBtn onClick={() => setEditing(p)} title="Редактировать">✎</IconBtn>
+                      {p.barcode && <IconBtn onClick={() => setPrinting(p)} title="Печать штрихкода">▤</IconBtn>}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
 
       {editing && <ProductModal product={editing === "new" ? null : editing} onClose={() => setEditing(null)} />}

@@ -33,18 +33,22 @@ const TENANT_WHERE: Record<Prisma.ModelName, (orgId: string) => Where> = {
   Sale: (orgId) => ({ store: { organizationId: orgId } }),
   SaleItem: (orgId) => ({ sale: { store: { organizationId: orgId } } }),
   AiBriefing: (orgId) => ({ organizationId: orgId }),
+  Employee: (orgId) => ({ store: { organizationId: orgId } }),
+  Shift: (orgId) => ({ store: { organizationId: orgId } }),
 };
 
 // Скалярные внешние ключи, которые могут встретиться в data при create/update.
-const FK_TARGETS: Record<string, "store" | "product" | "sale" | "user"> = {
+type FkTarget = "store" | "product" | "sale" | "user" | "employee";
+const FK_TARGETS: Record<string, FkTarget> = {
   storeId: "store",
   productId: "product",
   saleId: "sale",
   userId: "user",
   cashierId: "user",
+  employeeId: "employee",
 };
 
-function collectFks(data: unknown, acc: Record<"store" | "product" | "sale" | "user", Set<string>>) {
+function collectFks(data: unknown, acc: Record<FkTarget, Set<string>>) {
   if (Array.isArray(data)) {
     for (const item of data) collectFks(item, acc);
     return;
@@ -59,7 +63,7 @@ function collectFks(data: unknown, acc: Record<"store" | "product" | "sale" | "u
 
 async function assertFksBelongToOrg(orgId: string, data: unknown, organizationIdInData?: unknown) {
   if (organizationIdInData !== undefined && organizationIdInData !== orgId) throw new TenantError();
-  const acc = { store: new Set<string>(), product: new Set<string>(), sale: new Set<string>(), user: new Set<string>() };
+  const acc = { store: new Set<string>(), product: new Set<string>(), sale: new Set<string>(), user: new Set<string>(), employee: new Set<string>() };
   collectFks(data, acc);
   const checks: Promise<void>[] = [];
   const check = (count: Promise<number>, expected: number) =>
@@ -68,6 +72,7 @@ async function assertFksBelongToOrg(orgId: string, data: unknown, organizationId
   if (acc.product.size) check(prisma.product.count({ where: { id: { in: [...acc.product] }, store: { organizationId: orgId } } }), acc.product.size);
   if (acc.sale.size) check(prisma.sale.count({ where: { id: { in: [...acc.sale] }, store: { organizationId: orgId } } }), acc.sale.size);
   if (acc.user.size) check(prisma.user.count({ where: { id: { in: [...acc.user] }, organizationId: orgId } }), acc.user.size);
+  if (acc.employee.size) check(prisma.employee.count({ where: { id: { in: [...acc.employee] }, store: { organizationId: orgId } } }), acc.employee.size);
   await Promise.all(checks);
 }
 

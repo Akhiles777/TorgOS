@@ -18,9 +18,8 @@ export default async function ReceiptsPage() {
         <h1 className="text-xl font-semibold">Чеки за сегодня</h1>
         <span className="text-ink-soft text-sm">{totals.count} чеков · {money0(totals.sum)} ₽</span>
       </div>
-      <div className="grid grid-cols-3 gap-2 mb-5 max-w-md">
+      <div className="grid grid-cols-2 gap-2 mb-5 max-w-sm">
         <Mini label="Наличные" value={totals.CASH} />
-        <Mini label="Карта" value={totals.CARD} />
         <Mini label="Перевод" value={totals.TRANSFER} />
       </div>
       <ReceiptsList rows={rows} />

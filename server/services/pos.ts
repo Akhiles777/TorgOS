@@ -62,6 +62,7 @@ export async function commitSale(
   storeId: string,
   cashierId: string,
   payload: CommitPayload,
+  employeeId: string | null = null,
 ): Promise<CommitResult> {
   if (!payload.lines.length) throw new PosError("Чек пуст");
 
@@ -101,7 +102,7 @@ export async function commitSale(
 
     const sale = await tx.sale.create({
       data: {
-        storeId, cashierId, total, paymentMethod, cashGiven, changeGiven,
+        storeId, cashierId, employeeId, total, paymentMethod, cashGiven, changeGiven,
         items: { create: items },
       },
       select: { id: true, number: true },
