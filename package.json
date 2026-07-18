@@ -8,7 +8,8 @@
     "start": "NODE_ENV=production node server.mjs",
     "lint": "eslint",
     "test": "vitest run",
-    "db:seed": "prisma db seed"
+    "db:seed": "prisma db seed",
+    "db:logins": "tsx prisma/ensure-logins.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

@@ -87,9 +87,9 @@ const PRODUCTS: SeedProduct[] = [
 const d2 = (n: number) => new Prisma.Decimal(n.toFixed(2));
 const d3 = (n: number) => new Prisma.Decimal(n.toFixed(3));
 
-// Единственный логин — Гасан. Пароль не печатается в консоль и не показывается
-// на странице входа; задаётся через SEED_OWNER_PASSWORD, иначе дефолт для демо.
-const OWNER_PASSWORD = process.env.SEED_OWNER_PASSWORD || "Gasan-2026!";
+// Логины. Пароли можно переопределить через env, иначе — эти дефолты.
+const OWNER_PASSWORD = process.env.SEED_OWNER_PASSWORD || "gasan777";
+const ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD || "admin123";
 
 async function main() {
   console.log("Очищаю базу…");
@@ -118,12 +118,18 @@ async function main() {
     },
   });
 
-  // Алункачев Гасан — ЕДИНСТВЕННЫЙ логин-аккаунт (владелец + админ + касса).
-  // storeId привязан к точке, поэтому ему открыты кабинет, админка и касса.
+  // Алункачев Гасан — владелец (кабинет + админка + касса).
   const owner = await prisma.user.create({
     data: {
       organizationId: org.id, storeId: store.id, role: "OWNER",
       name: "Алункачев Гасан", login: "gasan", passwordHash: hashSync(OWNER_PASSWORD, 10),
+    },
+  });
+  // Общий логин администратора точки (админка + касса, без кабинета владельца).
+  await prisma.user.create({
+    data: {
+      organizationId: org.id, storeId: store.id, role: "ADMIN",
+      name: "Администратор", login: "admin", passwordHash: hashSync(ADMIN_PASSWORD, 10),
     },
   });
 
@@ -141,7 +147,7 @@ async function main() {
   // и сотрудники смены. Ни товаров, ни поставщиков, ни продаж — каталог с нуля.
   if (process.env.SEED_EMPTY) {
     console.log("Готово (пустой старт): организация, точка, логин gasan и сотрудники смены. Каталог пустой.");
-    console.log("Вход один — gasan. Земфира и Рита выбираются на кассе как смена (без отдельных логинов).");
+    console.log("Логины: gasan (владелец) и admin (администратор). Земфира и Рита — смена на кассе, без логинов.");
     return;
   }
 
@@ -263,7 +269,7 @@ async function main() {
   } else {
     console.log(`Готово: ${products.length} товаров, ${sales.length} чеков на ${Math.round(totalRevenue)} ₽, ${saleItems.length} позиций, ${movements.length} движений.`);
   }
-  console.log("Вход один — gasan (владелец+админ+касса). Смена (Земфира/Рита) выбирается на кассе тапом.");
+  console.log("Логины: gasan (владелец) / admin (администратор). Смена (Земфира/Рита) выбирается на кассе тапом.");
 }
 
 main()
