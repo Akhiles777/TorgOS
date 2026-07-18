@@ -6,6 +6,7 @@ import { WeightModal } from "./WeightModal";
 import { PaymentModal } from "./PaymentModal";
 import { useStockSocket } from "./useStockSocket";
 import { money0 } from "@/lib/format";
+import { logoutAction } from "@/app/logout/action";
 import type { StockUpdate } from "@/server/realtime";
 import type { CartLine, PaymentMethod, PosProduct } from "./types";
 
@@ -229,12 +230,14 @@ export function PosScreen({ initialProducts, cashierName }: { initialProducts: P
           />
           <StatusDot status={socketStatus} />
           <span className="text-sm text-ink-soft hidden sm:block">{cashierName}</span>
-          <a
-            href="/logout"
-            className="h-9 px-3 grid place-items-center rounded-tag border border-line text-ink-soft text-sm hover:text-stamp hover:border-stamp transition-colors"
-          >
-            Выйти
-          </a>
+          <form action={logoutAction}>
+            <button
+              type="submit"
+              className="h-9 px-3 grid place-items-center rounded-tag border border-line text-ink-soft text-sm hover:text-stamp hover:border-stamp transition-colors"
+            >
+              Выйти
+            </button>
+          </form>
         </header>
 
         <div className="flex-1 min-h-0">

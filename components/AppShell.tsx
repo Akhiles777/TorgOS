@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import type { Role } from "@prisma/client";
+import { logoutAction } from "@/app/logout/action";
 
 // Каркас админки и кабинета. Касса своего каркаса не имеет — там всё подчинено чеку.
 export function AppShell({
@@ -41,9 +42,11 @@ export function AppShell({
             ))}
           </nav>
           <span className="text-sm text-ink-soft hidden sm:block">{userName}</span>
-          <Link href="/logout" className="text-sm text-ink-soft hover:text-stamp px-2">
-            Выйти
-          </Link>
+          <form action={logoutAction}>
+            <button type="submit" className="text-sm text-ink-soft hover:text-stamp px-2">
+              Выйти
+            </button>
+          </form>
         </div>
       </header>
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 py-6">{children}</main>
