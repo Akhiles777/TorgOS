@@ -16,18 +16,19 @@ export type ProductRow = {
   stock: number;
   expiry: string | null;
   isActive: boolean;
+  showInPos: boolean;
   marginPct: number;
 };
 
 function row(p: {
   id: string; barcode: string | null; name: string; price: Prisma.Decimal; costPrice: Prisma.Decimal;
-  unit: Unit; category: string; stock: Prisma.Decimal; expiry: Date | null; isActive: boolean;
+  unit: Unit; category: string; stock: Prisma.Decimal; expiry: Date | null; isActive: boolean; showInPos: boolean;
 }): ProductRow {
   const price = toNum(p.price), cost = toNum(p.costPrice);
   return {
     id: p.id, barcode: p.barcode, name: p.name, price, costPrice: cost, unit: p.unit,
     category: p.category, stock: toNum(p.stock), expiry: p.expiry ? p.expiry.toISOString().slice(0, 10) : null,
-    isActive: p.isActive, marginPct: price > 0 ? Math.round(((price - cost) / price) * 100) : 0,
+    isActive: p.isActive, showInPos: p.showInPos, marginPct: price > 0 ? Math.round(((price - cost) / price) * 100) : 0,
   };
 }
 
@@ -57,6 +58,7 @@ export type ProductInput = {
   barcode?: string | null;
   expiry?: string | null;
   stock?: number;
+  showInPos?: boolean;
 };
 
 export class ProductError extends Error {}
@@ -93,6 +95,7 @@ export async function createProduct(db: TenantDb, storeId: string, input: Produc
       storeId, name: input.name.trim(), price: new Prisma.Decimal(input.price.toFixed(2)),
       costPrice: new Prisma.Decimal(input.costPrice.toFixed(2)), unit: input.unit, category: input.category.trim() || "Прочее",
       barcode, expiry: input.expiry ? new Date(input.expiry) : null, stock: new Prisma.Decimal((input.stock ?? 0).toFixed(3)),
+      showInPos: input.showInPos ?? false,
     },
   });
   return row(created);
@@ -108,6 +111,7 @@ export async function updateProduct(db: TenantDb, id: string, input: ProductInpu
       name: input.name.trim(), price: new Prisma.Decimal(input.price.toFixed(2)),
       costPrice: new Prisma.Decimal(input.costPrice.toFixed(2)), unit: input.unit,
       category: input.category.trim() || "Прочее", barcode, expiry: input.expiry ? new Date(input.expiry) : null,
+      showInPos: input.showInPos ?? false,
     },
   });
   return row(updated);

@@ -177,6 +177,9 @@ async function main() {
     expiry: p.expiryDays != null ? new Date(now.getTime() + p.expiryDays * dayMs) : null,
     stock: d3(p.stock),
     isActive: true,
+    // На плитки кассы — безштрихкодные (овощи/зелень) и «неудобные сканировать»
+    // развесные, плюс вода в бутылках как пример тяжёлого товара.
+    showInPos: !!p.noBarcode || p.unit === "KG" || p.name.includes("Вода"),
   }));
   await prisma.product.createMany({ data: products });
 

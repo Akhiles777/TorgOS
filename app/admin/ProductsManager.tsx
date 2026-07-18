@@ -229,6 +229,13 @@ function ProductModal({ product, onClose }: { product: ProductRow | null; onClos
           </label>
         </div>
         {!product && <DecimalField name="stock" label="Начальный остаток" defaultValue="0" />}
+        <label className="flex items-start gap-2.5 bg-paper-2 border border-line rounded-tag p-3 cursor-pointer">
+          <input type="checkbox" name="showInPos" defaultChecked={product?.showInPos ?? false} className="mt-0.5 w-5 h-5 accent-stamp" />
+          <span className="text-sm">
+            Показывать плиткой в кассе
+            <span className="block text-xs text-ink-soft">Для товаров без штрихкода или тех, что неудобно сканировать (тяжёлая вода и т.п.).</span>
+          </span>
+        </label>
         {error && <p className="text-stamp text-sm">{error}</p>}
         <div className="grid grid-cols-2 gap-3 pt-2">
           <Button type="button" variant="line" size="lg" onClick={onClose}>Отмена</Button>

@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import type { Role } from "@prisma/client";
 import { logoutAction } from "@/app/logout/action";
+import { RestockBanner } from "@/components/RestockBanner";
 
 // Каркас админки и кабинета. Касса своего каркаса не имеет — там всё подчинено чеку.
 export function AppShell({
@@ -23,6 +24,7 @@ export function AppShell({
 
   return (
     <div className="min-h-[100dvh] flex flex-col">
+      <RestockBanner />
       <header className="sticky top-0 z-30 bg-paper/95 backdrop-blur border-b border-line">
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center gap-4">
           <span className="font-mono-nums font-bold text-lg">ТоргОС</span>

@@ -26,15 +26,20 @@ function joinRoom(storeId, ws) {
   ws.on("close", () => rooms.get(storeId)?.delete(ws));
 }
 
-function broadcast(storeId, updates, saleNumber) {
+function sendToRoom(storeId, obj) {
   const room = rooms.get(storeId);
   if (!room) return;
-  const payload = JSON.stringify({ type: "stock", storeId, updates, saleNumber });
+  const payload = JSON.stringify(obj);
   for (const ws of room) if (ws.readyState === ws.OPEN) ws.send(payload);
+}
+
+function broadcast(storeId, updates, saleNumber) {
+  sendToRoom(storeId, { type: "stock", storeId, updates, saleNumber });
 }
 
 // Мост к API-роутам Next: тот же процесс, общий globalThis.
 globalThis.__torgosBroadcast = broadcast;
+globalThis.__torgosBroadcastMsg = (storeId, message) => sendToRoom(storeId, message);
 
 function parseCookie(header, name) {
   if (!header) return null;

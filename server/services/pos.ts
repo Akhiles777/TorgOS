@@ -9,6 +9,10 @@ export type CommitPayload = {
   lines: CartLinePayload[];
   paymentMethod: PaymentMethod;
   cashGiven?: number | null;
+  // Продажа в долг: чек пробит, деньги ещё не получены. Имя/контакт — опционально.
+  isDebt?: boolean;
+  debtorName?: string | null;
+  debtorContact?: string | null;
 };
 
 export type PosProduct = {
@@ -19,15 +23,16 @@ export type PosProduct = {
   unit: "PCS" | "KG";
   category: string;
   stock: number;
+  showInPos: boolean;
 };
 
 function shape(p: {
-  id: string; barcode: string | null; name: string; price: Prisma.Decimal; unit: "PCS" | "KG"; category: string; stock: Prisma.Decimal;
+  id: string; barcode: string | null; name: string; price: Prisma.Decimal; unit: "PCS" | "KG"; category: string; stock: Prisma.Decimal; showInPos: boolean;
 }): PosProduct {
-  return { id: p.id, barcode: p.barcode, name: p.name, price: toNum(p.price), unit: p.unit, category: p.category, stock: toNum(p.stock) };
+  return { id: p.id, barcode: p.barcode, name: p.name, price: toNum(p.price), unit: p.unit, category: p.category, stock: toNum(p.stock), showInPos: p.showInPos };
 }
 
-const SELECT = { id: true, barcode: true, name: true, price: true, unit: true, category: true, stock: true } as const;
+const SELECT = { id: true, barcode: true, name: true, price: true, unit: true, category: true, stock: true, showInPos: true } as const;
 
 // Все активные товары точки — для плиток и клиентского поиска.
 export async function loadPosProducts(db: TenantDb, storeId: string): Promise<PosProduct[]> {
@@ -90,10 +95,12 @@ export async function commitSale(
       items.push({ productId: p.id, quantity: q, priceAtSale: price });
     }
 
+    const isDebt = !!payload.isDebt;
     const paymentMethod = payload.paymentMethod;
     let cashGiven: Prisma.Decimal | null = null;
     let changeGiven: Prisma.Decimal | null = null;
-    if (paymentMethod === "CASH") {
+    // В долг деньги сейчас не берём — проверку «получено» не применяем.
+    if (paymentMethod === "CASH" && !isDebt) {
       const given = new Prisma.Decimal((payload.cashGiven ?? 0).toFixed(2));
       if (given.lessThan(total)) throw new PosError("Получено меньше суммы чека");
       cashGiven = given;
@@ -103,6 +110,9 @@ export async function commitSale(
     const sale = await tx.sale.create({
       data: {
         storeId, cashierId, employeeId, total, paymentMethod, cashGiven, changeGiven,
+        isDebt,
+        debtorName: isDebt ? (payload.debtorName?.trim() || null) : null,
+        debtorContact: isDebt ? (payload.debtorContact?.trim() || null) : null,
         items: { create: items },
       },
       select: { id: true, number: true },

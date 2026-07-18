@@ -45,6 +45,7 @@ function readProduct(fd: FormData): ProductInput {
     barcode: (String(fd.get("barcode") ?? "").trim() || null),
     expiry: (String(fd.get("expiry") ?? "").trim() || null),
     stock: parseRuNumber(fd.get("stock")),
+    showInPos: fd.get("showInPos") != null, // чекбокс: есть в форме = включён
   };
 }
 

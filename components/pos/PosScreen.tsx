@@ -3,11 +3,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Receipt } from "./Receipt";
 import { Tiles } from "./Tiles";
 import { WeightModal } from "./WeightModal";
-import { PaymentModal } from "./PaymentModal";
+import { PaymentModal, type DebtInfo } from "./PaymentModal";
 import { useStockSocket } from "./useStockSocket";
 import { money0 } from "@/lib/format";
 import { logoutAction } from "@/app/logout/action";
 import { startShiftAction } from "@/app/pos/actions";
+import { RestockBanner } from "@/components/RestockBanner";
 import type { StockUpdate } from "@/server/realtime";
 import type { CartLine, PaymentMethod, PosProduct } from "./types";
 
@@ -16,7 +17,7 @@ type Mode =
   | { t: "idle" }
   | { t: "weight"; product: PosProduct }
   | { t: "payment"; method: PaymentMethod }
-  | { t: "done"; change: number | null; number: number };
+  | { t: "done"; change: number | null; number: number; debt: boolean };
 
 let keyCounter = 0;
 const nextKey = () => `l${++keyCounter}`;
@@ -144,8 +145,23 @@ export function PosScreen({
     setSearch("");
   }, []);
 
+  // ИИ-поиск товара (нечёткий, с опечатками) — возвращает id подходящих.
+  const aiSearch = useCallback(async (q: string): Promise<string[]> => {
+    try {
+      const res = await fetch("/api/pos/ai-search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: q }),
+      });
+      const data = await res.json();
+      return Array.isArray(data.ids) ? data.ids : [];
+    } catch {
+      return [];
+    }
+  }, []);
+
   const doPay = useCallback(
-    async (method: PaymentMethod, cashGiven: number | null) => {
+    async (method: PaymentMethod, cashGiven: number | null, debt: DebtInfo | null) => {
       if (busy) return;
       setBusy(true);
       try {
@@ -156,6 +172,9 @@ export function PosScreen({
             lines: cart.map((l) => ({ productId: l.productId, quantity: l.quantity })),
             paymentMethod: method,
             cashGiven,
+            isDebt: !!debt,
+            debtorName: debt?.debtorName || null,
+            debtorContact: debt?.debtorContact || null,
           }),
         });
         const data = await res.json();
@@ -174,7 +193,7 @@ export function PosScreen({
         setTimeout(() => {
           setTearing(false);
           clearCart();
-          setMode({ t: "done", change: data.changeGiven, number: data.number });
+          setMode({ t: "done", change: data.changeGiven, number: data.number, debt: !!debt });
           setBusy(false);
           setTimeout(() => setMode((m) => (m.t === "done" ? { t: "idle" } : m)), 3500);
         }, 460);
@@ -224,6 +243,7 @@ export function PosScreen({
 
   return (
     <div className="flex flex-col lg:flex-row h-[100dvh] overflow-hidden">
+      <RestockBanner />
       {/* Скрытый инпут сканера — всегда в фокусе в режиме idle */}
       <input
         ref={scannerRef}
@@ -283,7 +303,7 @@ export function PosScreen({
         </header>
 
         <div className="flex-1 min-h-0">
-          <Tiles products={liveProducts} stock={stock} query={search} onPick={(p) => addProduct(p)} />
+          <Tiles products={liveProducts} stock={stock} query={search} onPick={(p) => addProduct(p)} onAiSearch={aiSearch} />
         </div>
 
         {/* Панель оплаты + подсказки клавиш */}
@@ -372,14 +392,18 @@ export function PosScreen({
       {mode.t === "done" && (
         <div className="fixed inset-0 z-50 bg-ink/40 grid place-items-center p-4" onClick={() => setMode({ t: "idle" })}>
           <div className="bg-paper rounded-tag border border-line shadow-2xl px-10 py-8 text-center">
-            <div className="stamp inline-block px-5 py-2 text-2xl font-bold mb-4">Пробито</div>
+            <div className={`inline-block px-5 py-2 text-2xl font-bold mb-4 ${mode.debt ? "border-2 border-warn text-warn rounded-md rotate-[-6deg] uppercase tracking-wide" : "stamp"}`}>
+              {mode.debt ? "В долг" : "Пробито"}
+            </div>
             <p className="text-ink-soft">Чек №{mode.number}</p>
-            {mode.change != null && (
+            {mode.debt ? (
+              <p className="text-sm mt-4">Записано в раздел «Долги»</p>
+            ) : mode.change != null ? (
               <>
                 <p className="text-ink-soft uppercase tracking-wide text-sm mt-4">Сдача</p>
                 <p className="font-mono-nums font-bold text-6xl tabular-nums text-fresh">{money0(mode.change)}<span className="text-3xl"> ₽</span></p>
               </>
-            )}
+            ) : null}
             <p className="text-xs text-ink-soft mt-5">Экран очистится сам · нажмите, чтобы продолжить</p>
           </div>
         </div>

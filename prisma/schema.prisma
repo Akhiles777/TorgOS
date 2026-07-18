@@ -137,6 +137,10 @@ model Product {
   expiry    DateTime?
   stock     Decimal         @default(0) @db.Decimal(10, 3)
   isActive  Boolean         @default(true)
+  // Показывать плиткой в правом меню кассы (для товаров без штрихкода или
+  // тех, что неудобно сканировать — тяжёлые бутылки воды и т.п.). По умолчанию
+  // выключено: касса работает сканером, а плитки — только для избранного.
+  showInPos Boolean         @default(false)
   createdAt DateTime        @default(now())
   movements StockMovement[]
   saleItems SaleItem[]
@@ -174,11 +178,18 @@ model Sale {
   paymentMethod PaymentMethod
   cashGiven     Decimal?      @db.Decimal(10, 2)
   changeGiven   Decimal?      @db.Decimal(10, 2)
+  // Продажа «в долг»: чек пробит, но деньги ещё не получены. Попадает в раздел
+  // «Долги». debtPaidAt заполняется, когда долг погашен. Имя/контакт — опционально.
+  isDebt        Boolean       @default(false)
+  debtorName    String?
+  debtorContact String?
+  debtPaidAt    DateTime?
   createdAt     DateTime      @default(now())
   items         SaleItem[]
 
   @@index([storeId, createdAt])
   @@index([employeeId])
+  @@index([storeId, isDebt, debtPaidAt])
 }
 
 model SaleItem {
