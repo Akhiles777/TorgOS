@@ -7,6 +7,16 @@ export function toNum(v: unknown): number {
   return Number(v.toString());
 }
 
+// Числовые поля форм — принимаем и точку, и запятую (привычный ввод на
+// русской раскладке). Нативный <input type="number"> запятую не пускает
+// и молча обнуляет значение — отсюда «не сохраняется цена». Поля с этим
+// парсером — обычный текст с inputMode="decimal", без такого подвоха.
+export function parseRuNumber(v: FormDataEntryValue | null): number {
+  if (v == null) return 0;
+  const n = parseFloat(String(v).trim().replace(",", "."));
+  return Number.isFinite(n) ? n : 0;
+}
+
 // «1234.5» → «1 234,50 ₽»
 export function money(v: unknown): string {
   const n = toNum(v);

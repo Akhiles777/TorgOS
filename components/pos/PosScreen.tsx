@@ -155,17 +155,17 @@ export function PosScreen({ initialProducts, cashierName }: { initialProducts: P
     [busy, cart, clearCart, showFlash],
   );
 
-  // Горячие клавиши: F2/F3/F4 — оплата, Delete — очистить, Esc — закрыть
+  // Горячие клавиши: F2/F3 — оплата (карту не принимаем), Delete — очистить, Esc — закрыть
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (mode.t === "weight") return; // модалка веса ловит свои клавиши
-      if (["F2", "F3", "F4"].includes(e.key)) {
+      if (["F2", "F3"].includes(e.key)) {
         e.preventDefault();
         if (cart.length === 0) {
           showFlash({ kind: "error", text: "Чек пуст" });
           return;
         }
-        const method: PaymentMethod = e.key === "F2" ? "CASH" : e.key === "F3" ? "CARD" : "TRANSFER";
+        const method: PaymentMethod = e.key === "F2" ? "CASH" : "TRANSFER";
         setMode({ t: "payment", method });
       } else if (e.key === "Escape") {
         if (mode.t === "payment" && !busy) setMode({ t: "idle" });
@@ -239,8 +239,7 @@ export function PosScreen({ initialProducts, cashierName }: { initialProducts: P
         <footer className="shrink-0 grid grid-cols-[1fr_auto] gap-3 items-center">
           <div className="flex gap-2">
             <PayBtn label="Наличные" hotkey="F2" onClick={() => trigger("F2")} disabled={!cart.length} />
-            <PayBtn label="Карта" hotkey="F3" onClick={() => trigger("F3")} disabled={!cart.length} />
-            <PayBtn label="Перевод" hotkey="F4" onClick={() => trigger("F4")} disabled={!cart.length} />
+            <PayBtn label="Перевод" hotkey="F3" onClick={() => trigger("F3")} disabled={!cart.length} />
           </div>
           <button
             onClick={() => cart.length && clearCart()}
@@ -305,9 +304,9 @@ export function PosScreen({ initialProducts, cashierName }: { initialProducts: P
   );
 
   // Программно эмулируем нажатие F-клавиши (для кнопок мышью/тапом)
-  function trigger(key: "F2" | "F3" | "F4") {
+  function trigger(key: "F2" | "F3") {
     if (!cart.length) return;
-    const method: PaymentMethod = key === "F2" ? "CASH" : key === "F3" ? "CARD" : "TRANSFER";
+    const method: PaymentMethod = key === "F2" ? "CASH" : "TRANSFER";
     setMode({ t: "payment", method });
   }
 }

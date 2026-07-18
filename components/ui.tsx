@@ -48,6 +48,39 @@ export function Field({
   );
 }
 
+// Числовое поле для денег/веса: обычный текст + inputMode="decimal", а не
+// <input type="number"> — тот на многих браузерах не пускает запятую как
+// десятичный разделитель и молча обнуляет значение при вводе «199,90».
+// Парный парсер — lib/format.ts::parseRuNumber.
+export function DecimalField({
+  label,
+  className = "",
+  defaultValue,
+  ...rest
+}: Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "onChange"> & { label?: string }) {
+  return (
+    <label className="block">
+      {label && <span className="block text-sm text-ink-soft mb-1">{label}</span>}
+      <input
+        type="text"
+        inputMode="decimal"
+        defaultValue={defaultValue}
+        onKeyDown={(e) => {
+          // Enter в числовом поле не должен молча сабмитить многополевую форму
+          if (e.key === "Enter") e.preventDefault();
+        }}
+        onInput={(e) => {
+          const el = e.currentTarget;
+          const cleaned = el.value.replace(/[^\d.,]/g, "");
+          if (cleaned !== el.value) el.value = cleaned;
+        }}
+        className={`w-full h-11 px-3 bg-paper border border-line rounded-tag text-ink font-mono-nums placeholder:text-ink-soft/60 focus:border-ink ${className}`}
+        {...rest}
+      />
+    </label>
+  );
+}
+
 // Ценник-плашка — второй мотив системы: бумажный ярлык с дыркой под нитку.
 export function PriceTag({
   title,

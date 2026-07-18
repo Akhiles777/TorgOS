@@ -1,7 +1,7 @@
 "use client";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui";
+import { Button, DecimalField } from "@/components/ui";
 import { Barcode } from "@/components/Barcode";
 import { money, money0, qty, unitLabel } from "@/lib/format";
 import type { ProductRow, ProductFilter } from "@/server/services/products";
@@ -142,7 +142,15 @@ function ProductModal({ product, onClose }: { product: ProductRow | null; onClos
 
   return (
     <Overlay onCancel={onClose}>
-      <form action={onSubmit} className="w-[min(94vw,520px)] space-y-3">
+      <form
+        action={onSubmit}
+        onKeyDown={(e) => {
+          // Штрихкод-сканер шлёт Enter после цифр — не даём ему преждевременно
+          // отправить форму, пока не заполнены остальные обязательные поля.
+          if (e.key === "Enter" && (e.target as HTMLElement).tagName !== "BUTTON") e.preventDefault();
+        }}
+        className="w-[min(94vw,520px)] space-y-3"
+      >
         <h2 className="text-xl font-semibold">{product ? "Редактировать товар" : "Новый товар"}</h2>
         {product && <input type="hidden" name="id" value={product.id} />}
         <label className="block">
@@ -167,32 +175,26 @@ function ProductModal({ product, onClose }: { product: ProductRow | null; onClos
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <label className="block">
-            <span className="text-sm text-ink-soft">Цена продажи, ₽</span>
-            <input name="price" type="number" step="0.01" min="0" defaultValue={product?.price} required className="w-full h-11 px-3 bg-paper border border-line rounded-tag font-mono-nums focus:border-ink" />
-          </label>
-          <label className="block">
-            <span className="text-sm text-ink-soft">Себестоимость, ₽</span>
-            <input name="costPrice" type="number" step="0.01" min="0" defaultValue={product?.costPrice} required className="w-full h-11 px-3 bg-paper border border-line rounded-tag font-mono-nums focus:border-ink" />
-          </label>
+          <DecimalField name="price" label="Цена продажи, ₽" defaultValue={product?.price} required />
+          <DecimalField name="costPrice" label="Себестоимость, ₽" defaultValue={product?.costPrice} required />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <label className="block">
             <span className="text-sm text-ink-soft">Штрихкод (EAN-13)</span>
-            <input name="barcode" defaultValue={product?.barcode ?? ""} placeholder={unit === "KG" ? "сгенерируется" : "13 цифр"}
-              className="w-full h-11 px-3 bg-paper border border-line rounded-tag font-mono-nums focus:border-ink" />
+            <input
+              name="barcode"
+              defaultValue={product?.barcode ?? ""}
+              placeholder={unit === "KG" ? "сгенерируется" : "13 цифр"}
+              onKeyDown={(e) => e.key === "Enter" && e.preventDefault()}
+              className="w-full h-11 px-3 bg-paper border border-line rounded-tag font-mono-nums focus:border-ink"
+            />
           </label>
           <label className="block">
             <span className="text-sm text-ink-soft">Срок годности</span>
             <input name="expiry" type="date" defaultValue={product?.expiry ?? ""} className="w-full h-11 px-3 bg-paper border border-line rounded-tag focus:border-ink" />
           </label>
         </div>
-        {!product && (
-          <label className="block">
-            <span className="text-sm text-ink-soft">Начальный остаток</span>
-            <input name="stock" type="number" step="0.001" min="0" defaultValue="0" className="w-full h-11 px-3 bg-paper border border-line rounded-tag font-mono-nums focus:border-ink" />
-          </label>
-        )}
+        {!product && <DecimalField name="stock" label="Начальный остаток" defaultValue="0" />}
         {error && <p className="text-stamp text-sm">{error}</p>}
         <div className="grid grid-cols-2 gap-3 pt-2">
           <Button type="button" variant="line" size="lg" onClick={onClose}>Отмена</Button>
@@ -237,8 +239,19 @@ function MoveModal({ product, onClose }: { product: ProductRow; onClose: () => v
         </div>
         <label className="block">
           <span className="text-sm text-ink-soft">Количество, {unitLabel(product.unit)}</span>
-          <input name="quantity" type="number" step={product.unit === "KG" ? "0.001" : "1"} min="0" required autoFocus
-            className="w-full h-14 px-3 text-2xl font-mono-nums bg-paper border border-line rounded-tag focus:border-ink" />
+          <input
+            name="quantity"
+            type="text"
+            inputMode="decimal"
+            required
+            autoFocus
+            onInput={(e) => {
+              const el = e.currentTarget;
+              const cleaned = el.value.replace(/[^\d.,]/g, "");
+              if (cleaned !== el.value) el.value = cleaned;
+            }}
+            className="w-full h-14 px-3 text-2xl font-mono-nums bg-paper border border-line rounded-tag focus:border-ink"
+          />
         </label>
         <label className="block">
           <span className="text-sm text-ink-soft">Причина / комментарий</span>

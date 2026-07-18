@@ -211,7 +211,8 @@ async function main() {
         movements.push({ id: randomUUID(), productId: prod.id, type: "OUT", quantity: d3(qty), reason: "продажа", userId: shiftCashier.id, createdAt });
         soldByProduct.set(prod.id, (soldByProduct.get(prod.id) ?? 0) + qty);
       }
-      const pm: PaymentMethod = rand() < 0.55 ? "CASH" : rand() < 0.78 ? "CARD" : "TRANSFER";
+      // Карту не принимаем — только наличные и перевод (реальный способ оплаты магазина)
+      const pm: PaymentMethod = rand() < 0.65 ? "CASH" : "TRANSFER";
       let cashGiven: number | null = null;
       let changeGiven: number | null = null;
       if (pm === "CASH") {

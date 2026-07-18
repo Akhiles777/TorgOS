@@ -4,7 +4,8 @@ import { Button } from "@/components/ui";
 import { money0 } from "@/lib/format";
 import type { PaymentMethod } from "./types";
 
-// Оплата. CASH → «получено» + сдача крупно, на лету. CARD/TRANSFER → одно подтверждение.
+// Оплата. Карту не принимаем — только наличные и перевод.
+// CASH → «получено» + сдача крупно, на лету. TRANSFER → одно подтверждение.
 export function PaymentModal({
   total,
   initialMethod,
@@ -58,8 +59,8 @@ export function PaymentModal({
           <span className="font-mono-nums font-bold text-5xl tabular-nums">{money0(total)}<span className="text-2xl"> ₽</span></span>
         </div>
 
-        <div className="grid grid-cols-3 gap-2 mb-5">
-          {(["CASH", "CARD", "TRANSFER"] as PaymentMethod[]).map((m) => (
+        <div className="grid grid-cols-2 gap-2 mb-5">
+          {(["CASH", "TRANSFER"] as PaymentMethod[]).map((m) => (
             <button
               key={m}
               onClick={() => setMethod(m)}
@@ -67,8 +68,8 @@ export function PaymentModal({
                 method === m ? "bg-ink text-paper border-ink" : "bg-paper-2 border-line hover:border-ink"
               }`}
             >
-              {m === "CASH" ? "Наличные" : m === "CARD" ? "Карта" : "Перевод"}
-              <span className="block text-[11px] opacity-60 font-mono-nums">{m === "CASH" ? "F2" : m === "CARD" ? "F3" : "F4"}</span>
+              {m === "CASH" ? "Наличные" : "Перевод"}
+              <span className="block text-[11px] opacity-60 font-mono-nums">{m === "CASH" ? "F2" : "F3"}</span>
             </button>
           ))}
         </div>
@@ -119,10 +120,9 @@ export function PaymentModal({
               </span>
             </div>
           </div>
+          
         ) : (
-          <p className="text-ink-soft py-6 text-center">
-            {method === "CARD" ? "Приложите карту к терминалу и подтвердите оплату." : "Дождитесь перевода и подтвердите."}
-          </p>
+          <p className="text-ink-soft py-6 text-center">Дождитесь перевода и подтвердите.</p>
         )}
 
         <div className="grid grid-cols-2 gap-3 mt-6">

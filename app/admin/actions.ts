@@ -5,6 +5,7 @@ import {
   createProduct, updateProduct, setActive, moveStock, ProductError, type ProductInput,
 } from "@/server/services/products";
 import { createStaff, StaffError } from "@/server/services/receipts";
+import { parseRuNumber } from "@/lib/format";
 import type { MovementType, Role, Unit } from "@prisma/client";
 
 type Result = { ok: true } | { ok: false; error: string };
@@ -12,13 +13,13 @@ type Result = { ok: true } | { ok: false; error: string };
 function readProduct(fd: FormData): ProductInput {
   return {
     name: String(fd.get("name") ?? ""),
-    price: Number(fd.get("price") ?? 0),
-    costPrice: Number(fd.get("costPrice") ?? 0),
+    price: parseRuNumber(fd.get("price")),
+    costPrice: parseRuNumber(fd.get("costPrice")),
     unit: (String(fd.get("unit") ?? "PCS") as Unit),
     category: String(fd.get("category") ?? ""),
     barcode: (String(fd.get("barcode") ?? "").trim() || null),
     expiry: (String(fd.get("expiry") ?? "").trim() || null),
-    stock: fd.get("stock") != null ? Number(fd.get("stock")) : 0,
+    stock: parseRuNumber(fd.get("stock")),
   };
 }
 
@@ -54,7 +55,7 @@ export async function moveStockAction(_prev: unknown, fd: FormData): Promise<Res
     const { user, db } = await requireApi("ADMIN", "OWNER");
     const id = String(fd.get("id") ?? "");
     const type = String(fd.get("type") ?? "IN") as MovementType;
-    const quantity = Number(fd.get("quantity") ?? 0);
+    const quantity = parseRuNumber(fd.get("quantity"));
     const reason = String(fd.get("reason") ?? "");
     await moveStock(db, id, user.id, type, quantity, reason);
     revalidatePath("/admin");

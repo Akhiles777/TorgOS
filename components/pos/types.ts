@@ -11,4 +11,7 @@ export type CartLine = {
   quantity: number;
 };
 
-export type PaymentMethod = "CASH" | "CARD" | "TRANSFER";
+// Касса принимает только наличные и перевод — карту не берём.
+// (В БД тип платежа шире — Prisma.PaymentMethod включает CARD для истории
+// старых чеков, но с кассы новый платёж картой создать нельзя.)
+export type PaymentMethod = "CASH" | "TRANSFER";

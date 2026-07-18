@@ -1,7 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(open -a Docker)"
+      "Bash(open -a Docker)",
+      "Bash(npx tsc *)",
+      "Bash(curl -s -o /dev/null -w \"3010: %{http_code}\\\\n\" http://localhost:3010/login)",
+      "Bash(grep -o '\\\\$ACTION_1:0[^/]*' /tmp/loginpage2.html | head -1)",
+      "Read(//private/tmp/**)",
+      "Bash(curl -s -b /tmp/cj2.txt -c /tmp/cj2.txt -F '$ACTION_REF_1=' -F '$ACTION_1:0={\"id\":\"__TRACKED_VAR__\",\"bound\":\"$@1\"}' -F '$ACTION_1:1=[null]' -F '$ACTION_KEY=__TRACKED_VAR__' -F login=gasan -F password=Gasan-2026! http://localhost:3010/login -o /tmp/loginresult2.html -D /tmp/loginheaders2.txt)"
     ]
   }
 }
