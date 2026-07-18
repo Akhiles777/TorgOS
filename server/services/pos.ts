@@ -99,9 +99,10 @@ export async function commitSale(
     const paymentMethod = payload.paymentMethod;
     let cashGiven: Prisma.Decimal | null = null;
     let changeGiven: Prisma.Decimal | null = null;
-    // В долг деньги сейчас не берём — проверку «получено» не применяем.
-    if (paymentMethod === "CASH" && !isDebt) {
-      const given = new Prisma.Decimal((payload.cashGiven ?? 0).toFixed(2));
+    // Наличные: «получено» НЕ обязательно. Если не введено (0/пусто) — считаем
+    // оплату «под расчёт» (сдачи нет). Если введено — проверяем и считаем сдачу.
+    if (paymentMethod === "CASH" && !isDebt && payload.cashGiven != null && payload.cashGiven > 0) {
+      const given = new Prisma.Decimal(payload.cashGiven.toFixed(2));
       if (given.lessThan(total)) throw new PosError("Получено меньше суммы чека");
       cashGiven = given;
       changeGiven = given.minus(total);

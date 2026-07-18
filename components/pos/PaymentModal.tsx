@@ -35,23 +35,27 @@ export function PaymentModal({
 
   const given = parseFloat(cash.replace(",", ".")) || 0;
   const change = given - total;
-  const canCash = method === "CASH" && given >= total;
-  const canPay = isDebt || (method === "CASH" ? canCash : true);
+  const enough = given >= total; // введено и хватает → есть сдача
+  const tooLittle = given > 0 && given < total; // введено, но мало → нельзя
+  // Ввод необязателен: пусто (given=0) = «под расчёт». Мало = запрет.
+  const canPay = isDebt || method === "TRANSFER" || !tooLittle;
 
-  const BILLS = [100, 200, 500, 1000, 2000, 5000];
+  // Умная подсказка купюр РФ: чем реально может рассчитаться покупатель —
+  // точная сумма, ближайшие «круглые» (10/50/100/500/1000) и одиночные купюры.
   const quick = useMemo(() => {
-    const opts: number[] = [];
-    const exact = Math.ceil(total * 100) / 100;
-    if (Math.abs(exact - Math.round(exact)) > 0.001) opts.push(exact);
-    for (const bill of BILLS) if (bill >= total) opts.push(bill);
-    return opts.slice(0, 6);
+    const t = Math.ceil(total * 100) / 100;
+    const set = new Set<number>();
+    set.add(Math.ceil(t)); // ровно, без сдачи
+    for (const step of [10, 50, 100, 500, 1000]) set.add(Math.ceil(t / step) * step);
+    for (const bill of [100, 200, 500, 1000, 2000, 5000]) if (bill >= t) set.add(bill);
+    return [...set].filter((v) => v >= t).sort((a, b) => a - b).slice(0, 6);
   }, [total]);
 
   const pay = () => {
     if (busy || !canPay) return;
     onPay(
       method,
-      !isDebt && method === "CASH" ? given : null,
+      !isDebt && method === "CASH" && given > 0 ? given : null,
       isDebt ? { debtorName: debtorName.trim(), debtorContact: debtorContact.trim() } : null,
     );
   };
@@ -115,7 +119,7 @@ export function PaymentModal({
 
             {method === "CASH" ? (
               <div>
-                <label className="block text-sm text-ink-soft mb-1">Получено</label>
+                <label className="block text-sm text-ink-soft mb-1">Получено <span className="opacity-60">(необязательно — если под расчёт)</span></label>
                 <input
                   ref={cashRef}
                   inputMode="decimal"
@@ -149,12 +153,12 @@ export function PaymentModal({
 
                 <div
                   className={`mt-5 rounded-tag px-5 py-4 border-2 flex items-end justify-between transition-colors ${
-                    canCash ? "border-fresh bg-fresh/10" : "border-line bg-paper-2"
+                    enough ? "border-fresh bg-fresh/10" : tooLittle ? "border-stamp bg-stamp/10" : "border-line bg-paper-2"
                   }`}
                 >
-                  <span className="text-ink-soft uppercase tracking-wide">Сдача</span>
-                  <span className={`font-mono-nums font-bold text-5xl tabular-nums ${canCash ? "text-fresh" : "text-ink-soft/50"}`}>
-                    {canCash ? money0(change) : "—"}<span className="text-2xl"> ₽</span>
+                  <span className="text-ink-soft uppercase tracking-wide">{tooLittle ? "Не хватает" : "Сдача"}</span>
+                  <span className={`font-mono-nums font-bold text-5xl tabular-nums ${enough ? "text-fresh" : tooLittle ? "text-stamp" : "text-ink-soft/50"}`}>
+                    {enough ? money0(change) : tooLittle ? money0(total - given) : "—"}<span className="text-2xl"> ₽</span>
                   </span>
                 </div>
               </div>
