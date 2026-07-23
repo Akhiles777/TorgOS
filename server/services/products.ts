@@ -3,7 +3,7 @@ import { Prisma, type Unit, type MovementType } from "@prisma/client";
 import type { TenantDb } from "../tenant";
 import { prisma } from "../db";
 import { toNum } from "@/lib/format";
-import { internalBarcode, isValidEan13 } from "@/lib/ean13";
+import { internalBarcode, isValidBarcode } from "@/lib/ean13";
 
 export type ProductRow = {
   id: string;
@@ -82,7 +82,7 @@ export async function createProduct(db: TenantDb, storeId: string, input: Produc
   if (input.price < 0 || input.costPrice < 0) throw new ProductError("Цена не может быть отрицательной");
 
   let barcode = input.barcode?.trim() || null;
-  if (barcode && !isValidEan13(barcode)) throw new ProductError("Штрихкод должен быть валидным EAN-13 (13 цифр)");
+  if (barcode && !isValidBarcode(barcode)) throw new ProductError("Штрихкод должен быть валидным EAN-13 (13 цифр) или EAN-8 (8 цифр)");
   // Развесной без штрихкода — генерируем внутренний EAN-13 (для печати ярлыка)
   if (!barcode && input.unit === "KG") barcode = await nextInternalBarcode(storeId);
   if (barcode) {
@@ -104,7 +104,7 @@ export async function createProduct(db: TenantDb, storeId: string, input: Produc
 export async function updateProduct(db: TenantDb, id: string, input: ProductInput): Promise<ProductRow> {
   if (!input.name.trim()) throw new ProductError("Укажите название");
   const barcode = input.barcode?.trim() || null;
-  if (barcode && !isValidEan13(barcode)) throw new ProductError("Штрихкод должен быть валидным EAN-13");
+  if (barcode && !isValidBarcode(barcode)) throw new ProductError("Штрихкод должен быть валидным EAN-13 (13 цифр) или EAN-8 (8 цифр)");
   const updated = await db.product.update({
     where: { id },
     data: {
@@ -119,6 +119,21 @@ export async function updateProduct(db: TenantDb, id: string, input: ProductInpu
 
 export async function setActive(db: TenantDb, id: string, isActive: boolean) {
   await db.product.update({ where: { id }, data: { isActive } });
+}
+
+// Полное удаление товара из базы. Разрешено ТОЛЬКО если товар ни разу не
+// продавался: иначе удаление порвало бы историю чеков и исказило выручку
+// (SaleItem ссылается на Product без каскада — это защита, а не помеха).
+// Для проданных товаров правильный путь — снять с продажи (setActive false).
+// Движения склада (StockMovement) удалятся каскадом вместе с товаром.
+export async function deleteProduct(db: TenantDb, id: string): Promise<void> {
+  const sold = await db.saleItem.count({ where: { productId: id } });
+  if (sold > 0) {
+    throw new ProductError(
+      "Товар уже есть в чеках — удалить нельзя, иначе история продаж и выручка станут неверными.",
+    );
+  }
+  await db.product.delete({ where: { id } });
 }
 
 // Приход/списание — атомарно меняем stock и пишем движение.

@@ -68,12 +68,13 @@ export function WeightModal({
 export function Overlay({ children, onCancel }: { children: React.ReactNode; onCancel: () => void }) {
   return (
     <div
-      className="fixed inset-0 z-50 bg-ink/40 grid place-items-center p-4"
+      className="fixed inset-0 z-50 bg-ink/40 flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onCancel();
       }}
     >
-      <div className="bg-paper rounded-tag border border-line shadow-2xl p-6">{children}</div>
+      {/* p-4 на мобиле, скролл — чтобы длинные формы не обрезались на низких экранах */}
+      <div className="bg-paper rounded-tag border border-line shadow-2xl p-4 sm:p-6 my-auto max-h-[94dvh] overflow-y-auto">{children}</div>
     </div>
   );
 }

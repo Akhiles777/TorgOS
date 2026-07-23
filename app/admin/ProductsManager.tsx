@@ -5,7 +5,7 @@ import { Button, DecimalField } from "@/components/ui";
 import { Barcode } from "@/components/Barcode";
 import { money, money0, qty, unitLabel } from "@/lib/format";
 import type { ProductRow, ProductFilter } from "@/server/services/products";
-import { saveProductAction, moveStockAction } from "./actions";
+import { saveProductAction, moveStockAction, deleteProductAction, toggleActiveAction } from "./actions";
 import { Overlay } from "@/components/pos/WeightModal";
 
 const FILTER_LABELS: Record<ProductFilter, string> = {
@@ -18,6 +18,37 @@ export function ProductsManager({ products, filter, query }: { products: Product
   const [moving, setMoving] = useState<ProductRow | null>(null);
   const [printing, setPrinting] = useState<ProductRow | null>(null);
   const [q, setQ] = useState(query);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [, startAction] = useTransition();
+
+  // Удаление из базы. Если товар уже в чеках — сервис откажет, и мы предлагаем
+  // снять с продажи: история продаж важнее, чем чистота справочника.
+  const remove = (p: ProductRow) => {
+    if (!confirm(`Удалить «${p.name}» из базы?\n\nОтменить будет нельзя.`)) return;
+    setBusyId(p.id);
+    startAction(async () => {
+      const res = await deleteProductAction(p.id);
+      setBusyId(null);
+      if (res.ok) {
+        router.refresh();
+        return;
+      }
+      if (confirm(`${res.error}\n\nСнять «${p.name}» с продажи вместо удаления?`)) {
+        await toggleActiveAction(p.id, false);
+        router.refresh();
+      }
+    });
+  };
+
+  // Вернуть снятый товар обратно в продажу.
+  const restore = (p: ProductRow) => {
+    setBusyId(p.id);
+    startAction(async () => {
+      await toggleActiveAction(p.id, true);
+      setBusyId(null);
+      router.refresh();
+    });
+  };
 
   const setFilter = (f: ProductFilter) => {
     const params = new URLSearchParams();
@@ -97,10 +128,14 @@ export function ProductsManager({ products, filter, query }: { products: Product
                         <span className={low ? "text-warn font-semibold" : ""}>{qty(p.stock, p.unit)} {unitLabel(p.unit)}</span>
                       </td>
                       <td className="px-3 py-2">
-                        <div className="flex gap-1 justify-end">
+                        <div className="flex gap-1 justify-end items-center">
                           <IconBtn onClick={() => setMoving(p)} title="Приход / списание">±</IconBtn>
                           <IconBtn onClick={() => setEditing(p)} title="Редактировать">✎</IconBtn>
                           {p.barcode && <IconBtn onClick={() => setPrinting(p)} title="Печать штрихкода">▤</IconBtn>}
+                          {!p.isActive && <IconBtn onClick={() => restore(p)} title="Вернуть в продажу">↩</IconBtn>}
+                          {/* Удаление отделено от остальных действий — необратимо */}
+                          <span className="w-px h-6 bg-line mx-1.5 shrink-0" aria-hidden />
+                          <IconBtn onClick={() => remove(p)} title="Удалить товар" danger disabled={busyId === p.id}>✕</IconBtn>
                         </div>
                       </td>
                     </tr>
@@ -130,10 +165,14 @@ export function ProductsManager({ products, filter, query }: { products: Product
                     <span className={`font-mono-nums text-sm ${low ? "text-warn font-semibold" : "text-ink-soft"}`}>
                       Остаток: {qty(p.stock, p.unit)} {unitLabel(p.unit)}
                     </span>
-                    <div className="flex gap-1.5">
+                    <div className="flex gap-1.5 items-center">
                       <IconBtn onClick={() => setMoving(p)} title="Приход / списание">±</IconBtn>
                       <IconBtn onClick={() => setEditing(p)} title="Редактировать">✎</IconBtn>
                       {p.barcode && <IconBtn onClick={() => setPrinting(p)} title="Печать штрихкода">▤</IconBtn>}
+                      {!p.isActive && <IconBtn onClick={() => restore(p)} title="Вернуть в продажу">↩</IconBtn>}
+                      {/* Удаление отделено от остальных действий — необратимо */}
+                      <span className="w-px h-6 bg-line mx-1 shrink-0" aria-hidden />
+                      <IconBtn onClick={() => remove(p)} title="Удалить товар" danger disabled={busyId === p.id}>✕</IconBtn>
                     </div>
                   </div>
                 </div>
@@ -150,10 +189,21 @@ export function ProductsManager({ products, filter, query }: { products: Product
   );
 }
 
-function IconBtn({ children, onClick, title }: { children: React.ReactNode; onClick: () => void; title: string }) {
+function IconBtn({
+  children, onClick, title, danger = false, disabled = false,
+}: { children: React.ReactNode; onClick: () => void; title: string; danger?: boolean; disabled?: boolean }) {
   return (
-    <button onClick={onClick} title={title} aria-label={title}
-      className="w-8 h-8 grid place-items-center rounded-tag border border-line hover:border-ink hover:bg-paper">
+    <button
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+      disabled={disabled}
+      className={`w-8 h-8 shrink-0 grid place-items-center rounded-tag border disabled:opacity-40 ${
+        danger
+          ? "border-stamp/40 text-stamp hover:bg-stamp hover:text-stamp-ink hover:border-stamp"
+          : "border-line hover:border-ink hover:bg-paper"
+      }`}
+    >
       {children}
     </button>
   );
@@ -214,11 +264,11 @@ function ProductModal({ product, onClose }: { product: ProductRow | null; onClos
         </div>
         <div className="grid grid-cols-2 gap-3">
           <label className="block">
-            <span className="text-sm text-ink-soft">Штрихкод (EAN-13)</span>
+            <span className="text-sm text-ink-soft">Штрихкод (EAN-13 или EAN-8)</span>
             <input
               name="barcode"
               defaultValue={product?.barcode ?? ""}
-              placeholder={unit === "KG" ? "сгенерируется" : "13 цифр"}
+              placeholder={unit === "KG" ? "сгенерируется" : "13 или 8 цифр"}
               onKeyDown={(e) => e.key === "Enter" && e.preventDefault()}
               className="w-full h-11 px-3 bg-paper border border-line rounded-tag font-mono-nums focus:border-ink"
             />

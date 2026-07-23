@@ -26,14 +26,14 @@ export function AppShell({
     <div className="min-h-[100dvh] flex flex-col">
       <RestockBanner />
       <header className="sticky top-0 z-30 bg-paper/95 backdrop-blur border-b border-line">
-        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center gap-4">
-          <span className="font-mono-nums font-bold text-lg">ТоргОС</span>
-          <nav className="flex gap-1 flex-1">
+        <div className="max-w-6xl mx-auto px-3 sm:px-4 h-14 flex items-center gap-2 sm:gap-4">
+          <span className="font-mono-nums font-bold text-base sm:text-lg shrink-0">ТоргОС</span>
+          <nav className="flex gap-1 flex-1 overflow-x-auto">
             {links.filter((l) => l.show).map((l) => (
               <Link
                 key={l.href}
                 href={l.href}
-                className={`px-3 h-9 inline-flex items-center rounded-tag text-sm font-medium ${
+                className={`px-2.5 sm:px-3 h-9 inline-flex items-center rounded-tag text-sm font-medium whitespace-nowrap ${
                   (active === "owner" && l.href === "/owner") || (active === "admin" && l.href === "/admin")
                     ? "bg-ink text-paper"
                     : "text-ink-soft hover:bg-paper-2"
@@ -44,14 +44,14 @@ export function AppShell({
             ))}
           </nav>
           <span className="text-sm text-ink-soft hidden sm:block">{userName}</span>
-          <form action={logoutAction}>
-            <button type="submit" className="text-sm text-ink-soft hover:text-stamp px-2">
+          <form action={logoutAction} className="shrink-0">
+            <button type="submit" className="text-sm text-ink-soft hover:text-stamp px-1.5 sm:px-2">
               Выйти
             </button>
           </form>
         </div>
       </header>
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 py-6">{children}</main>
+      <main className="flex-1 max-w-6xl w-full mx-auto px-3 sm:px-4 py-4 sm:py-6">{children}</main>
     </div>
   );
 }

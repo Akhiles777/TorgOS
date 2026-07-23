@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { requireApi, requireApiStoreScope, AuthError } from "@/server/guard";
 import {
-  createProduct, updateProduct, setActive, moveStock, ProductError, type ProductInput,
+  createProduct, updateProduct, setActive, moveStock, deleteProduct, ProductError, type ProductInput,
 } from "@/server/services/products";
 import { createStaff, StaffError } from "@/server/services/receipts";
 import { createEmployee, deactivateEmployee, ShiftError } from "@/server/services/shift";
@@ -73,6 +73,21 @@ export async function toggleActiveAction(id: string, isActive: boolean): Promise
     return { ok: true };
   } catch {
     return { ok: false, error: "Не удалось изменить" };
+  }
+}
+
+// Удаление товара из базы. Проданные товары защищены — сервис вернёт ошибку,
+// а UI предложит снять с продажи вместо удаления.
+export async function deleteProductAction(id: string): Promise<Result> {
+  try {
+    const { db } = await requireApi("ADMIN", "OWNER");
+    await deleteProduct(db, id);
+    revalidatePath("/admin");
+    return { ok: true };
+  } catch (e) {
+    if (e instanceof ProductError || e instanceof AuthError) return { ok: false, error: e.message };
+    console.error(e);
+    return { ok: false, error: "Не удалось удалить товар" };
   }
 }
 

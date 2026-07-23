@@ -270,24 +270,24 @@ export function PosScreen({
       </aside>
 
       {/* Рабочая зона */}
-      <main className="flex-1 flex flex-col min-w-0 p-4 gap-3">
-        <header className="flex items-center gap-3 shrink-0">
+      <main className="flex-1 flex flex-col min-w-0 p-3 sm:p-4 gap-2.5 sm:gap-3">
+        <header className="flex items-center gap-2 sm:gap-3 shrink-0">
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Поиск по названию…"
-            className="flex-1 h-11 px-3 bg-paper border border-line rounded-tag focus:border-ink"
+            placeholder="Поиск…"
+            className="flex-1 min-w-0 h-11 px-3 bg-paper border border-line rounded-tag focus:border-ink"
           />
           <StatusDot status={socketStatus} />
           {/* Кто на смене — тап открывает пикер (пересменка среди дня) */}
           {employees.length > 0 && (
             <button
               onClick={() => setPickingShift(true)}
-              className="h-9 px-3 inline-flex items-center gap-1.5 rounded-tag border border-line text-sm hover:border-ink transition-colors"
+              className="h-9 px-2.5 sm:px-3 inline-flex items-center gap-1.5 rounded-tag border border-line text-sm hover:border-ink transition-colors shrink-0"
               title="Сменить, кто на смене"
             >
               <span className="text-ink-soft hidden sm:inline">Смена:</span>
-              <span className="font-medium">{shift ? shift.name : "выбрать"}</span>
+              <span className="font-medium truncate max-w-[6rem] sm:max-w-none">{shift ? shift.name : "выбрать"}</span>
               <span className="text-ink-soft">⟳</span>
             </button>
           )}
@@ -315,9 +315,9 @@ export function PosScreen({
           <button
             onClick={() => cart.length && clearCart()}
             disabled={!cart.length}
-            className="h-14 px-5 rounded-tag border border-line text-ink-soft hover:text-stamp hover:border-stamp disabled:opacity-40 transition-colors"
+            className="h-14 px-3.5 sm:px-5 rounded-tag border border-line text-ink-soft hover:text-stamp hover:border-stamp disabled:opacity-40 transition-colors"
           >
-            Очистить <span className="text-xs opacity-60">Del</span>
+            Очистить <span className="text-xs opacity-60 hidden sm:inline">Del</span>
           </button>
         </footer>
       </main>
@@ -424,9 +424,9 @@ function PayBtn({ label, hotkey, onClick, disabled }: { label: string; hotkey: s
     <button
       onClick={onClick}
       disabled={disabled}
-      className="h-14 px-5 rounded-tag bg-ink text-paper font-medium disabled:opacity-40 hover:brightness-110 active:scale-[0.98] transition"
+      className="flex-1 sm:flex-none h-14 px-4 sm:px-5 rounded-tag bg-ink text-paper font-medium disabled:opacity-40 hover:brightness-110 active:scale-[0.98] transition"
     >
-      {label} <span className="text-xs opacity-60 font-mono-nums">{hotkey}</span>
+      {label} <span className="text-xs opacity-60 font-mono-nums hidden sm:inline">{hotkey}</span>
     </button>
   );
 }

@@ -12,14 +12,14 @@ export function AdminTabs() {
     { href: "/admin/staff", label: "Сотрудники" },
   ];
   return (
-    <div className="flex gap-1 border-b border-line mb-5 -mt-1 overflow-x-auto">
+    <div className="flex gap-1 border-b border-line mb-5 -mt-1 overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0">
       {tabs.map((t) => {
         const active = t.href === "/admin" ? path === "/admin" : path.startsWith(t.href);
         return (
           <Link
             key={t.href}
             href={t.href}
-            className={`px-3 pb-2 pt-1 text-sm font-medium border-b-2 -mb-px ${
+            className={`px-3 pb-2.5 pt-1.5 sm:pb-2 sm:pt-1 text-sm font-medium border-b-2 -mb-px whitespace-nowrap ${
               active ? "border-stamp text-ink" : "border-transparent text-ink-soft hover:text-ink"
             }`}
           >
