@@ -52,27 +52,40 @@ export function Field({
 // <input type="number"> — тот на многих браузерах не пускает запятую как
 // десятичный разделитель и молча обнуляет значение при вводе «199,90».
 // Парный парсер — lib/format.ts::parseRuNumber.
+//
+// Работает и неуправляемым (defaultValue, как раньше), и управляемым (value +
+// onValueChange) — второе нужно для полей, зависящих друг от друга (например,
+// себестоимость, которая сама считается от цены, пока её не тронули руками).
 export function DecimalField({
   label,
   className = "",
   defaultValue,
+  value,
+  onValueChange,
   ...rest
-}: Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "onChange"> & { label?: string }) {
+}: Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "onChange"> & {
+  label?: string;
+  value?: string;
+  onValueChange?: (value: string) => void;
+}) {
+  const controlled = value !== undefined;
   return (
     <label className="block">
       {label && <span className="block text-sm text-ink-soft mb-1">{label}</span>}
       <input
         type="text"
         inputMode="decimal"
-        defaultValue={defaultValue}
+        {...(controlled ? { value } : { defaultValue })}
         onKeyDown={(e) => {
           // Enter в числовом поле не должен молча сабмитить многополевую форму
           if (e.key === "Enter") e.preventDefault();
         }}
-        onInput={(e) => {
-          const el = e.currentTarget;
-          const cleaned = el.value.replace(/[^\d.,]/g, "");
-          if (cleaned !== el.value) el.value = cleaned;
+        onChange={(e) => {
+          const cleaned = e.currentTarget.value.replace(/[^\d.,]/g, "");
+          onValueChange?.(cleaned);
+          // В неуправляемом режиме чистим значение прямо в DOM (как раньше);
+          // в управляемом — этим занимается родитель через value.
+          if (!controlled && cleaned !== e.currentTarget.value) e.currentTarget.value = cleaned;
         }}
         className={`w-full h-11 px-3 bg-paper border border-line rounded-tag text-ink font-mono-nums placeholder:text-ink-soft/60 focus:border-ink ${className}`}
         {...rest}

@@ -3,7 +3,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button, DecimalField } from "@/components/ui";
 import { Barcode } from "@/components/Barcode";
-import { money, money0, qty, unitLabel } from "@/lib/format";
+import { money, money0, qty, unitLabel, parseRuNumber } from "@/lib/format";
 import type { ProductRow, ProductFilter } from "@/server/services/products";
 import { saveProductAction, moveStockAction, deleteProductAction, toggleActiveAction } from "./actions";
 import { Overlay } from "@/components/pos/WeightModal";
@@ -209,11 +209,25 @@ function IconBtn({
   );
 }
 
+// Себестоимость по умолчанию — цена минус 20% (то есть минус её пятая часть):
+// price - price/5 = price * 0.8.
+function defaultCostPrice(price: number): string {
+  if (price <= 0) return "";
+  const cost = Math.round((price - price / 5) * 100) / 100;
+  return String(cost);
+}
+
 function ProductModal({ product, onClose }: { product: ProductRow | null; onClose: () => void }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const [unit, setUnit] = useState(product?.unit ?? "PCS");
+
+  // Себестоимость на новом товаре считается сама (цена − 20%), пока её не
+  // тронули руками — тогда автоподстановка выключается насовсем для этой формы.
+  const [price, setPrice] = useState(product?.price != null ? String(product.price) : "");
+  const [costPrice, setCostPrice] = useState(product?.costPrice != null ? String(product.costPrice) : "");
+  const [costTouched, setCostTouched] = useState(!!product);
 
   const onSubmit = (fd: FormData) => {
     fd.set("unit", unit);
@@ -259,8 +273,31 @@ function ProductModal({ product, onClose }: { product: ProductRow | null; onClos
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <DecimalField name="price" label="Цена продажи, ₽" defaultValue={product?.price} required />
-          <DecimalField name="costPrice" label="Себестоимость, ₽" defaultValue={product?.costPrice} required />
+          <DecimalField
+            name="price"
+            label="Цена продажи, ₽"
+            value={price}
+            onValueChange={(v) => {
+              setPrice(v);
+              if (!costTouched) setCostPrice(defaultCostPrice(parseRuNumber(v)));
+            }}
+            required
+          />
+          <div>
+            <DecimalField
+              name="costPrice"
+              label="Себестоимость, ₽"
+              value={costPrice}
+              onValueChange={(v) => {
+                setCostPrice(v);
+                setCostTouched(true);
+              }}
+              required
+            />
+            {!product && !costTouched && costPrice && (
+              <span className="block text-xs text-ink-soft mt-1">авто: цена − 20% · можно изменить</span>
+            )}
+          </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <label className="block">
