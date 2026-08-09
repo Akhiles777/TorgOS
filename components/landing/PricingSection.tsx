@@ -1,34 +1,37 @@
-import { LinkButton } from "@/components/ui";
+import { LandingButton } from "./LandingButton";
 
-// Цены — плейсхолдеры (пункт 1 из обсуждения плана): реальные суммы
-// подставляются позже.
+// Цены — плейсхолдеры: реальные суммы подставляются позже. Обычные карточки,
+// не под чек — фирменный мотив на странице живёт только в «Как это работает».
 const PLANS = [
-  { name: "Пробный", price: "0 ₽", period: "14 дней", note: "Все функции, карта не нужна" },
-  { name: "Одна точка", price: "от ___ ₽", period: "в месяц", note: "Один магазин, безлимит по товарам" },
-  { name: "Сеть", price: "от ___ ₽", period: "в месяц", note: "Несколько точек, общая аналитика" },
+  { name: "Пробный", price: "0 ₽", period: "14 дней", note: "Все функции, карта не нужна", featured: false },
+  { name: "Одна точка", price: "от ___ ₽", period: "в месяц", note: "Один магазин, безлимит по товарам", featured: true },
+  { name: "Сеть", price: "от ___ ₽", period: "в месяц", note: "Несколько точек, общая аналитика", featured: false },
 ] as const;
 
 export function PricingSection() {
   return (
-    <section id="pricing" className="border-t-2 border-dashed border-line px-5 py-10 sm:px-8">
-      <h2 className="font-landing-text font-bold text-2xl tracking-tight mb-6">Тарифы</h2>
-      <ul className="space-y-0">
-        {PLANS.map((p) => (
-          <li key={p.name} className="py-4 border-b border-line last:border-b-0">
-            <div className="flex items-baseline">
-              <span className="font-landing-text font-semibold">{p.name}</span>
-              <span className="leader" aria-hidden />
-              <span className="font-landing-display tabular-nums text-lg shrink-0 text-right">{p.price}</span>
+    <section id="pricing" className="bg-land-ash-deep">
+      <div className="max-w-[1180px] mx-auto px-4 sm:px-6 py-14 sm:py-20">
+        <h2 className="font-landing-display font-semibold text-land-graphite text-2xl sm:text-3xl tracking-tight mb-8 text-center">Тарифы</h2>
+        <div className="grid sm:grid-cols-3 gap-4 max-w-[880px] mx-auto">
+          {PLANS.map((p) => (
+            <div
+              key={p.name}
+              className={`rounded-tag p-5 border ${p.featured ? "bg-land-graphite border-land-graphite" : "bg-land-ash border-land-graphite/15"}`}
+            >
+              <div className={`font-landing-text font-semibold ${p.featured ? "text-land-ash" : "text-land-graphite"}`}>{p.name}</div>
+              <div className={`font-landing-mono tabular-nums text-2xl mt-2 ${p.featured ? "text-land-ash" : "text-land-graphite"}`}>
+                {p.price}
+              </div>
+              <div className={`text-xs mt-0.5 ${p.featured ? "text-land-ash/60" : "text-land-graphite-soft"}`}>{p.period}</div>
+              <div className={`font-landing-text text-sm mt-3 ${p.featured ? "text-land-ash/80" : "text-land-graphite-soft"}`}>{p.note}</div>
             </div>
-            <div className="text-xs text-ink-soft mt-0.5">
-              {p.note} · {p.period}
-            </div>
-          </li>
-        ))}
-      </ul>
-      <LinkButton href="/register" variant="stamp" size="lg" className="w-full mt-6">
-        Начать бесплатно
-      </LinkButton>
+          ))}
+        </div>
+        <div className="mt-8 text-center">
+          <LandingButton href="/register" size="lg">Начать бесплатно</LandingButton>
+        </div>
+      </div>
     </section>
   );
 }

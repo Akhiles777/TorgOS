@@ -34,10 +34,25 @@
   --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: ui-monospace, "SF Mono", "SFMono-Regular", Consolas, monospace;
 
+  /* Лендинг v2 — палитра «торговое оборудование» (весы/касса/железо), не
+     крафт-бумага и не неон. Своё пространство имён (--color-land-*), чтобы
+     не путать с токенами самого приложения — они сознательно РАЗНЫЕ палитры. */
+  --color-land-ash: #e3e6e2; /* фон — холодная порошковая окраска корпуса */
+  --color-land-ash-deep: #c9cdc7; /* тень корпуса, вторичный фон */
+  --color-land-graphite: #1c1f1d; /* текст — 13.2:1 на ash */
+  --color-land-graphite-soft: #464b47; /* вторичный текст — 7.08:1 на ash */
+  --color-land-signal: #c62a17; /* единственный яркий акцент — заливки/бордеры/кнопка */
+  --color-land-signal-text: #8f1e11; /* signal как читаемый текст — 7.06:1 на ash */
+  --color-land-signal-on-dark: #f18f83; /* signal на тёмной табло-панели — 7.12:1 на graphite */
+  --color-land-ready: #2f6b4c; /* вторичный акцент — «индикатор готовности» */
+  --color-land-ready-text: #25533b; /* ready как текст — 7.01:1 на ash */
+
   /* Только для публичного лендинга — самохостинг через @fontsource,
-     кириллица проверена. */
-  --font-landing-display: "PT Mono", var(--font-mono);
+     кириллица проверена. Дисплей — Oswald (не моно: моно только для цифр,
+     см. --font-landing-mono), текст — PT Sans, без изменений от v1. */
+  --font-landing-display: "Oswald", var(--font-sans);
   --font-landing-text: "PT Sans", var(--font-sans);
+  --font-landing-mono: "PT Mono", var(--font-mono);
 
   /* Приложение (касса/админка/кабинет) — отдельная пара от лендинга,
      подобрана под другие условия (выгоревшая касса, мелкий кегль таблиц,
@@ -104,6 +119,15 @@
     flex: 1;
     margin: 0 0.35rem;
     border-bottom: 2px dotted var(--color-line);
+    transform: translateY(-0.28em);
+  }
+  /* То же самое, но для единственной чек-карточки на лендинге v2 (своя
+     палитра --color-land-*, не должна тянуть цвет приложения). */
+  .leader-land {
+    flex: 1;
+    margin: 0 0.35rem;
+    border-bottom: 2px dotted var(--color-land-graphite);
+    opacity: 0.25;
     transform: translateY(-0.28em);
   }
 

@@ -1,17 +1,18 @@
-import { LinkButton } from "@/components/ui";
+import { LandingButton } from "./LandingButton";
 
-// «Итого» настоящего чека — финальная строка страницы, крупнее и жирнее
-// всего, что было выше. Кнопка — отрывной язычок ленты.
+// Финальный экран — единственная инверсия в графит на всю страницу. Не под
+// чек: просто тёмная секция как сильный завершающий момент.
 export function FinalCta() {
   return (
-    <section className="border-t-2 border-dashed border-line bg-ink text-paper px-5 py-10 sm:px-8 receipt-torn">
-      <div className="font-landing-display tabular-nums text-sm text-paper/60 mb-2">ИТОГО</div>
-      <h2 className="font-landing-display text-2xl sm:text-3xl leading-snug mb-6 max-w-[22ch]">
+    <section className="bg-land-graphite px-4 sm:px-6 py-16 sm:py-20 text-center">
+      <h2 className="font-landing-display font-semibold text-land-ash text-2xl sm:text-3xl leading-snug max-w-[22ch] mx-auto">
         Хватит тетради. Начать бесплатно.
       </h2>
-      <LinkButton href="/register" variant="fresh" size="xl" className="w-full sm:w-auto">
-        Начать бесплатно
-      </LinkButton>
+      <div className="mt-7">
+        <LandingButton href="/register" size="lg">
+          Начать бесплатно
+        </LandingButton>
+      </div>
     </section>
   );
 }

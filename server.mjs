@@ -127,6 +127,22 @@ app.prepare().then(() => {
     wss.handleUpgrade(req, socket, head, (ws) => {
       joinRoom(storeId, ws);
       ws.send(JSON.stringify({ type: "hello" }));
+
+      // Скан с телефона (/pos/scan) → рассылается всем открытым кассам той же
+      // точки, ровно как через сам WS уже рассылаются остатки. Проверяем
+      // форму сообщения — это единственное место, где сервер СЛУШАЕТ клиента,
+      // не только шлёт (до сих пор WS был чисто push-каналом).
+      ws.on("message", (data) => {
+        let msg;
+        try {
+          msg = JSON.parse(data.toString());
+        } catch {
+          return;
+        }
+        if (msg?.type === "scan" && typeof msg.code === "string" && msg.code.length > 0 && msg.code.length <= 64) {
+          sendToRoom(storeId, { type: "scan", code: msg.code });
+        }
+      });
     });
   });
 

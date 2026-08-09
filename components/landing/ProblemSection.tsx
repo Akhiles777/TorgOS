@@ -20,19 +20,19 @@ const PAINS = [
 
 export function ProblemSection() {
   return (
-    <section className="border-t-2 border-dashed border-line px-5 py-10 sm:px-8">
-      <h2 className="font-landing-text font-bold text-2xl tracking-tight mb-6">Знакомо?</h2>
-      <ul className="space-y-6">
-        {PAINS.map(({ Mark, title, body }) => (
-          <li key={title} className="flex gap-4">
-            <Mark />
-            <div>
-              <h3 className="font-landing-text font-semibold mb-1">{title}</h3>
-              <p className="text-ink-soft text-[15px] leading-relaxed">{body}</p>
+    <section className="bg-land-ash-deep">
+      <div className="max-w-[1180px] mx-auto px-4 sm:px-6 py-12 sm:py-16">
+        <h2 className="font-landing-display font-semibold text-land-graphite text-2xl sm:text-3xl tracking-tight mb-8">Знакомо?</h2>
+        <div className="grid sm:grid-cols-3 gap-6 sm:gap-8">
+          {PAINS.map(({ Mark, title, body }) => (
+            <div key={title}>
+              <Mark />
+              <h3 className="font-landing-text font-semibold text-land-graphite mt-3 mb-1.5">{title}</h3>
+              <p className="font-landing-text text-land-graphite-soft text-[15px] leading-relaxed">{body}</p>
             </div>
-          </li>
-        ))}
-      </ul>
+          ))}
+        </div>
+      </div>
     </section>
   );
 }

@@ -13,6 +13,7 @@ import { Tiles } from "./Tiles";
 import { WeightModal } from "./WeightModal";
 import { PaymentModal, type DebtInfo } from "./PaymentModal";
 import { useStockSocket } from "./useStockSocket";
+import { useRemoteScan } from "./useRemoteScan";
 import { Modal, ReadoutPanel } from "@/components/ui";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
 import { money0 } from "@/lib/format";
@@ -63,6 +64,12 @@ export function PosScreen({
   const [pickingShift, setPickingShift] = useState(employees.length > 0 && !currentShift);
   // Камера-сканер: оверлей остаётся открытым между сканами — закрывает только кассир.
   const [cameraOpen, setCameraOpen] = useState(false);
+  // Подсказка с адресом /pos/scan — чтобы открыть его на другом устройстве.
+  const [phoneScanInfoOpen, setPhoneScanInfoOpen] = useState(false);
+  const [scanUrl, setScanUrl] = useState("");
+  useEffect(() => {
+    setScanUrl(`${location.origin}/pos/scan`);
+  }, []);
 
   const scannerRef = useRef<HTMLInputElement>(null);
   const scanBuf = useRef("");
@@ -154,6 +161,10 @@ export function PosScreen({
     },
     [addProduct, showFlash],
   );
+
+  // Скан с телефона (/pos/scan) прилетает по WS и обрабатывается ровно как
+  // проводной сканер — тем же handleScan, без отдельной ветки логики.
+  useRemoteScan(handleScan);
 
   const clearCart = useCallback(() => {
     setCart([]);
@@ -296,18 +307,25 @@ export function PosScreen({
 
       {/* Рабочая зона */}
       <main className="flex-1 flex flex-col min-w-0 p-3 sm:p-4 gap-2.5 sm:gap-3">
-        <header className="flex items-center gap-2 sm:gap-3 shrink-0">
+        <header className="flex items-center gap-2 sm:gap-3 shrink-0 flex-wrap">
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Поиск…"
-            className="flex-1 min-w-0 h-14 px-3 text-base bg-paper border border-line rounded-tag focus:border-ink"
+            className="flex-1 min-w-[120px] h-14 px-3 text-base bg-paper border border-line rounded-tag focus:border-ink"
           />
           <button
             onClick={() => setCameraOpen(true)}
             className="h-14 px-3 sm:px-4 rounded-tag border border-line font-medium hover:border-ink transition-colors shrink-0"
           >
             Скан
+          </button>
+          <button
+            onClick={() => setPhoneScanInfoOpen(true)}
+            className="h-14 px-3 sm:px-4 rounded-tag border border-line text-ink-soft font-medium hover:border-ink transition-colors shrink-0"
+            title="Сканировать с другого устройства, а пробивать здесь"
+          >
+            С телефона
           </button>
           <StatusDot status={socketStatus} />
           {/* Кто на смене — тап открывает пикер (пересменка среди дня) */}
@@ -400,6 +418,28 @@ export function PosScreen({
       )}
 
       {cameraOpen && <BarcodeScanner onScan={handleScan} onClose={() => setCameraOpen(false)} />}
+
+      {phoneScanInfoOpen && (
+        <Modal onCancel={() => setPhoneScanInfoOpen(false)}>
+          <div className="w-[min(92vw,380px)] font-app-text">
+            <h2 className="text-xl font-semibold mb-1">Скан с телефона</h2>
+            <p className="text-ink-soft text-sm mb-4">
+              Откройте этот адрес в браузере на телефоне (под тем же логином) — то, что там отсканируете, появится в
+              чеке прямо здесь, на этой кассе.
+            </p>
+            <div className="bg-paper-2 border border-line rounded-tag px-3 py-3 font-app-mono text-sm break-all select-all">
+              {scanUrl || "…"}
+            </div>
+            <p className="text-xs text-ink-soft mt-3">Камера на этом компьютере при этом продолжает работать как обычно.</p>
+            <button
+              onClick={() => setPhoneScanInfoOpen(false)}
+              className="w-full h-11 mt-5 rounded-tag border border-line text-ink-soft hover:border-ink"
+            >
+              Понятно
+            </button>
+          </div>
+        </Modal>
+      )}
 
       {mode.t === "weight" && (
         <WeightModal

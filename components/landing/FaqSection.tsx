@@ -34,18 +34,18 @@ const FAQ = [
 
 export function FaqSection() {
   return (
-    <section className="border-t-2 border-dashed border-line px-5 py-10 sm:px-8">
-      <h2 className="font-landing-text font-bold text-2xl tracking-tight mb-6">Вопросы</h2>
-      <div>
+    <section className="max-w-[1180px] mx-auto px-4 sm:px-6 py-14 sm:py-20">
+      <h2 className="font-landing-display font-semibold text-land-graphite text-2xl sm:text-3xl tracking-tight mb-8">Вопросы</h2>
+      <div className="max-w-[720px]">
         {FAQ.map(({ q, a }) => (
-          <details key={q} className="group border-b border-line py-3 [&_summary::-webkit-details-marker]:hidden">
-            <summary className="flex items-center justify-between gap-3 cursor-pointer list-none font-landing-text font-semibold text-[15px] marker:content-none">
+          <details key={q} className="group border-b border-land-graphite/15 py-4 [&_summary::-webkit-details-marker]:hidden">
+            <summary className="flex items-center justify-between gap-3 cursor-pointer list-none font-landing-text font-semibold text-land-graphite text-[15px] marker:content-none">
               {q}
-              <span className="text-ink-soft shrink-0 transition-transform group-open:rotate-45" aria-hidden>
+              <span className="text-land-graphite-soft shrink-0 transition-transform group-open:rotate-45 text-xl leading-none" aria-hidden>
                 +
               </span>
             </summary>
-            <p className="text-ink-soft text-[15px] leading-relaxed mt-2 max-w-[56ch]">{a}</p>
+            <p className="font-landing-text text-land-graphite-soft text-[15px] leading-relaxed mt-2.5 max-w-[56ch]">{a}</p>
           </details>
         ))}
       </div>
