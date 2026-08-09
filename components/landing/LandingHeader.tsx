@@ -1,17 +1,34 @@
+"use client";
+import { useEffect, useState } from "react";
 import { LandingButton } from "./LandingButton";
 
-// Липкая — обоснование: аудитория 45+, полезнее не скроллить обратно наверх
-// за кнопкой; шапка приложения (AppShell) тоже липкая — уже привычный паттерн.
+// Липкая, высота постоянна (граница всегда 1px — прозрачная либо цветная,
+// не появляется заново). Ниже 80px скролла — граница + тень, переход 200ms,
+// отключается при prefers-reduced-motion (motion-reduce: — просто без
+// анимации, конечное состояние то же).
 export function LandingHeader() {
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 80);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   return (
-    <header className="sticky top-0 z-30 bg-land-ash/95 backdrop-blur border-b border-land-graphite/10">
-      <div className="max-w-[1180px] mx-auto px-3 sm:px-6 h-16 flex items-center justify-between gap-1.5 sm:gap-3">
-        <span className="font-landing-display text-base sm:text-xl tracking-wide text-land-graphite shrink-0">ТоргОС</span>
-        <nav className="flex items-center gap-1 sm:gap-4 min-w-0">
-          <LandingButton href="/login" variant="ghost" size="md" className="px-1.5 sm:px-3 h-auto py-2 text-sm sm:text-[15px] shrink-0">
+    <header
+      className={`sticky top-0 z-30 bg-land-paper/95 backdrop-blur border-b transition-[border-color,box-shadow] duration-200 motion-reduce:transition-none ${
+        scrolled ? "border-land-line shadow-land-card" : "border-transparent"
+      }`}
+    >
+      <div className="max-w-[1200px] mx-auto px-6 md:px-10 h-16 flex items-center justify-between gap-3">
+        <span className="font-landing-display font-bold text-land-ink text-lg tracking-[-0.02em]">ТоргОС</span>
+        <nav className="flex items-center gap-2 sm:gap-4">
+          <LandingButton href="/login" variant="ghost" size="md" className="px-2 sm:px-3 h-auto py-2">
             Войти
           </LandingButton>
-          <LandingButton href="/register" variant="signal" size="md" className="px-2.5 sm:px-5 text-[13px] sm:text-[15px] shrink-0 whitespace-nowrap">
+          <LandingButton href="/register" variant="signal" size="md">
             Начать бесплатно
           </LandingButton>
         </nav>

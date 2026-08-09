@@ -1,3 +1,5 @@
+import { Section, SectionHeading } from "./Section";
+
 // <details>/<summary> — доступность и клавиатурная навигация из коробки,
 // без клиентского состояния и лишнего JS на странице, которую открывают
 // вечером с не самым быстрым мобильным интернетом.
@@ -34,21 +36,21 @@ const FAQ = [
 
 export function FaqSection() {
   return (
-    <section className="max-w-[1180px] mx-auto px-4 sm:px-6 py-14 sm:py-20">
-      <h2 className="font-landing-display font-semibold text-land-graphite text-2xl sm:text-3xl tracking-tight mb-8">Вопросы</h2>
+    <Section tone="surface">
+      <SectionHeading className="mb-16">Вопросы</SectionHeading>
       <div className="max-w-[720px]">
-        {FAQ.map(({ q, a }) => (
-          <details key={q} className="group border-b border-land-graphite/15 py-4 [&_summary::-webkit-details-marker]:hidden">
-            <summary className="flex items-center justify-between gap-3 cursor-pointer list-none font-landing-text font-semibold text-land-graphite text-[15px] marker:content-none">
+        {FAQ.map(({ q, a }, i) => (
+          <details key={q} className="group border-b border-land-line py-5 [&_summary::-webkit-details-marker]:hidden" data-reveal data-reveal-delay={i % 4}>
+            <summary className="flex items-center justify-between gap-3 cursor-pointer list-none font-landing-text font-medium text-land-ink text-land-body marker:content-none">
               {q}
-              <span className="text-land-graphite-soft shrink-0 transition-transform group-open:rotate-45 text-xl leading-none" aria-hidden>
+              <span className="text-land-muted shrink-0 transition-transform group-open:rotate-45 text-xl leading-none" aria-hidden>
                 +
               </span>
             </summary>
-            <p className="font-landing-text text-land-graphite-soft text-[15px] leading-relaxed mt-2.5 max-w-[56ch]">{a}</p>
+            <p className="font-landing-text text-land-body text-land-muted mt-3 max-w-[56ch]">{a}</p>
           </details>
         ))}
       </div>
-    </section>
+    </Section>
   );
 }

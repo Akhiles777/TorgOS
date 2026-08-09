@@ -1,36 +1,34 @@
-import { ScreenshotFrame } from "./ScreenshotFrame";
+import { Section, SectionHeading } from "./Section";
+import { ProductScreenshot } from "./ProductScreenshot";
 
-// Единственная секция, которой намеренно дано больше воздуха — эта мысль
-// продаёт сама. Здесь же — «камерный» скриншот: сканирование телефоном на
-// пересчёте буквально то, о чём идёт речь в тексте.
 export function InventorySection() {
   return (
-    <section className="max-w-[1180px] mx-auto px-4 sm:px-6 py-14 sm:py-20">
-      <div className="grid lg:grid-cols-[1fr_1fr] gap-10 items-center">
-        <div>
-          <h2 className="font-landing-display font-semibold text-land-graphite text-2xl sm:text-3xl tracking-tight mb-4 max-w-[16ch]">
-            Инвентаризация за час, а не за день
-          </h2>
-          <p className="font-landing-text text-land-graphite-soft text-base leading-relaxed max-w-[50ch] mb-6">
+    <Section tone="surface">
+      <div className="grid lg:grid-cols-[1fr_1fr] gap-10 lg:gap-16 items-center">
+        <div data-reveal>
+          <SectionHeading className="mb-6 max-w-[16ch]">Инвентаризация за час, а не за день</SectionHeading>
+          <p className="font-landing-text text-land-body text-land-muted max-w-[50ch] mb-8">
             Знакомая картина: магазин закрывается на целый день, весь коллектив с бумажкой и калькулятором пересчитывает
             полки. С телефоном в руках это час — сканируете позицию за позицией, система сама сверяет с тем, что должно
             быть по базе, и показывает только расхождения. Списание или оприходование — одной кнопкой.
           </p>
-          <div className="flex items-end gap-5 font-landing-mono tabular-nums">
+          <div className="flex items-end gap-6 font-landing-mono">
             <div>
-              <div className="text-xs text-land-graphite-soft uppercase tracking-wide mb-1">Было</div>
-              <div className="text-2xl text-land-graphite-soft line-through decoration-2">весь день</div>
+              <div className="text-land-mono-sm text-land-muted uppercase tracking-[0.04em] mb-1">Было</div>
+              <div className="text-land-h3 text-land-muted line-through decoration-2">весь день</div>
             </div>
-            <div className="text-2xl text-land-graphite-soft">→</div>
+            <div className="text-land-h3 text-land-muted">→</div>
             <div>
-              <div className="text-xs text-land-signal-text uppercase tracking-wide mb-1">Стало</div>
-              <div className="text-2xl text-land-signal-text">1 час</div>
+              <div className="text-land-mono-sm text-land-signal uppercase tracking-[0.04em] mb-1">Стало</div>
+              <div className="text-land-h3 text-land-signal">1 час</div>
             </div>
           </div>
         </div>
 
-        <ScreenshotFrame label="сканирование камерой на пересчёте" aspect="aspect-[4/3]" />
+        <div data-reveal>
+          <ProductScreenshot file="scan.png" alt="Сканирование камерой телефона на инвентаризации" label="сканирование камерой на пересчёте" aspect="aspect-[4/3]" />
+        </div>
       </div>
-    </section>
+    </Section>
   );
 }

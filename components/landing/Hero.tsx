@@ -1,32 +1,32 @@
 import { LandingButton } from "./LandingButton";
-import { ScreenshotFrame } from "./ScreenshotFrame";
+import { ProductScreenshot } from "./ProductScreenshot";
 
-// Продукт виден в первые пять секунд: заголовок слева, реальный экран кассы
-// справа. На мобильном — сообщение и кнопка сначала (до неё ближе большому
-// пальцу), скриншот сразу следом, не в конце длинного скролла.
+// Пропорция 55/45, скриншот 16:10 — продукт виден сразу, не квадратная заглушка.
 export function Hero() {
   return (
-    <section className="max-w-[1180px] mx-auto px-4 sm:px-6 pt-10 sm:pt-16 pb-12 sm:pb-20">
-      <div className="grid lg:grid-cols-[1fr_1.05fr] gap-10 lg:gap-14 items-center">
+    <section className="bg-land-paper pt-16 md:pt-24 pb-24 md:pb-36">
+      <div className="max-w-[1200px] mx-auto px-6 md:px-10 grid lg:grid-cols-[55fr_45fr] gap-10 lg:gap-16 items-center">
         <div>
-          <h1 className="font-landing-display font-semibold text-land-graphite text-[1.9rem] sm:text-5xl lg:text-[3.4rem] leading-[1.12] sm:leading-[1.08] tracking-tight max-w-[17ch] sm:max-w-[14ch]">
+          <h1 className="font-landing-display font-extrabold text-land-h1 tracking-[-0.02em] text-land-ink max-w-[15ch]">
             Знаете, что реально есть на полке — не открывая тетрадь
           </h1>
-          <p className="font-landing-text text-land-graphite-soft text-base sm:text-lg leading-relaxed mt-5 max-w-[46ch]">
+          <p className="font-landing-text text-land-body text-land-muted mt-6 max-w-[46ch]">
             Касса и учёт для магазина или кафе. Пробиваете чек обычным сканером или камерой телефона — а остатки,
             недостачи и что пора докупить видно сами, без вечерней сверки в тетради.
           </p>
-          <div className="mt-7 flex flex-col items-start gap-2.5">
+          <div className="mt-10 flex flex-col items-start gap-3">
             <LandingButton href="/register" size="lg">
               Начать бесплатно
             </LandingButton>
-            <span className="font-landing-text text-sm text-land-graphite-soft">
+            <span className="font-landing-text text-land-small text-land-muted">
               14 дней бесплатно · Карта не нужна · Работает с вашим сканером и телефоном
             </span>
           </div>
         </div>
 
-        <ScreenshotFrame label="касса с открытым чеком" aspect="aspect-[5/4]" />
+        <div>
+          <ProductScreenshot file="pos.png" alt="Касса ТоргОС с открытым чеком" label="касса с открытым чеком" aspect="aspect-[16/10]" priority />
+        </div>
       </div>
     </section>
   );

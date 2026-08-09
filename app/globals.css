@@ -34,25 +34,53 @@
   --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: ui-monospace, "SF Mono", "SFMono-Regular", Consolas, monospace;
 
-  /* Лендинг v2 — палитра «торговое оборудование» (весы/касса/железо), не
-     крафт-бумага и не неон. Своё пространство имён (--color-land-*), чтобы
-     не путать с токенами самого приложения — они сознательно РАЗНЫЕ палитры. */
-  --color-land-ash: #e3e6e2; /* фон — холодная порошковая окраска корпуса */
-  --color-land-ash-deep: #c9cdc7; /* тень корпуса, вторичный фон */
-  --color-land-graphite: #1c1f1d; /* текст — 13.2:1 на ash */
-  --color-land-graphite-soft: #464b47; /* вторичный текст — 7.08:1 на ash */
-  --color-land-signal: #c62a17; /* единственный яркий акцент — заливки/бордеры/кнопка */
-  --color-land-signal-text: #8f1e11; /* signal как читаемый текст — 7.06:1 на ash */
-  --color-land-signal-on-dark: #f18f83; /* signal на тёмной табло-панели — 7.12:1 на graphite */
-  --color-land-ready: #2f6b4c; /* вторичный акцент — «индикатор готовности» */
-  --color-land-ready-text: #25533b; /* ready как текст — 7.01:1 на ash */
+  /* Лендинг v3 — палитра и шкалы заданы заказчиком буквально (см. отчёт по
+     шагу токенов), не мой творческий выбор. Своё пространство имён
+     (--color-land-*), чтобы не задеть токены самого приложения — они не
+     совпадают буквально с именами из спецификации (--ink/--paper/--line и
+     т.д.), потому что эти имена уже заняты токенами приложения выше со
+     СВОИМИ, другими значениями; переопределять их означало бы перекрасить
+     кассу/админку/root заодно с лендингом. Значения — 1:1 из спецификации.
+     Контраст проверен (не входил в бриф как требование, но чтобы не гадать):
+     ink/paper 17.55:1, muted/paper 5.70:1 (обычный AA-таргет, не 7:1),
+     signal/paper 7.50:1, paper/signal (кнопка) 7.50:1 — без нареканий. */
+  --color-land-ink: #12171c;
+  --color-land-paper: #fcfcfa;
+  --color-land-surface: #f1f2ef;
+  --color-land-line: #dddfda;
+  --color-land-muted: #5c6670;
+  --color-land-signal: #0f5f3d;
+  --color-land-signal-d: #0a4429;
 
-  /* Только для публичного лендинга — самохостинг через @fontsource,
-     кириллица проверена. Дисплей — Oswald (не моно: моно только для цифр,
-     см. --font-landing-mono), текст — PT Sans, без изменений от v1. */
-  --font-landing-display: "Oswald", var(--font-sans);
-  --font-landing-text: "PT Sans", var(--font-sans);
-  --font-landing-mono: "PT Mono", var(--font-mono);
+  /* Радиусы и тень — тоже по спецификации: 4px элементы управления, 8px
+     карточки, одна тень для приподнятых карточек, больше никаких. */
+  --radius-land-control: 4px;
+  --radius-land-card: 8px;
+  --shadow-land-card: 0 2px 12px rgba(18, 23, 28, 0.06);
+
+  /* Шкала кеглей лендинга — заданные clamp() с парным line-height, Tailwind v4
+     сам генерит утилиты text-land-h1..text-land-mono-sm с нужным line-height. */
+  --text-land-h1: clamp(2.75rem, 6vw, 4.75rem); /* 44-76px */
+  --text-land-h1--line-height: 1.05;
+  --text-land-h2: clamp(1.875rem, 3.5vw, 2.75rem); /* 30-44px */
+  --text-land-h2--line-height: 1.15;
+  --text-land-h3: 1.375rem; /* 22px */
+  --text-land-h3--line-height: 1.3;
+  --text-land-body: 1.125rem; /* 18px — аудитория 45+, не 16 */
+  --text-land-body--line-height: 1.65;
+  --text-land-small: 0.9375rem; /* 15px */
+  --text-land-small--line-height: 1.5;
+  --text-land-mono-sm: 0.875rem; /* 14px */
+  --text-land-mono-sm--line-height: 1.4;
+
+  /* Только для лендинга — те же файлы, что уже подключены для приложения
+     (Unbounded/Golos Text/JetBrains Mono), самохостинг, кириллица проверена
+     при первой установке этих пакетов. Совпадение с --font-app-* — не
+     переиспользование одной переменной, а то, что спецификация лендинга
+     буквально назвала те же три гарнитуры, что уже стоят в приложении. */
+  --font-landing-display: "Unbounded Variable", var(--font-sans);
+  --font-landing-text: "Golos Text Variable", var(--font-sans);
+  --font-landing-mono: "JetBrains Mono", var(--font-mono);
 
   /* Приложение (касса/админка/кабинет) — отдельная пара от лендинга,
      подобрана под другие условия (выгоревшая касса, мелкий кегль таблиц,
@@ -121,14 +149,63 @@
     border-bottom: 2px dotted var(--color-line);
     transform: translateY(-0.28em);
   }
-  /* То же самое, но для единственной чек-карточки на лендинге v2 (своя
+  /* То же самое, но для единственной чек-карточки в «Как это работает» (своя
      палитра --color-land-*, не должна тянуть цвет приложения). */
   .leader-land {
     flex: 1;
     margin: 0 0.35rem;
-    border-bottom: 2px dotted var(--color-land-graphite);
+    border-bottom: 2px dotted var(--color-land-ink);
     opacity: 0.25;
-    transform: translateY(-0.28em);
+    transform: translateY(-0.28em) scaleX(0);
+    transform-origin: left;
+  }
+
+  /* ── Появление секций при скролле (Step 4) ──
+     Базовое состояние скрыто; JS (ScrollReveal) навешивает .is-revealed
+     через IntersectionObserver один раз при входе во вьюпорт. */
+  [data-reveal-section],
+  [data-reveal],
+  [data-reveal-row] {
+    opacity: 0;
+    transform: translateY(16px);
+    transition: opacity 500ms cubic-bezier(0.16, 1, 0.3, 1), transform 500ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  [data-reveal-section].is-revealed,
+  [data-reveal].is-revealed,
+  [data-reveal-row].is-revealed {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* Точки в «Как это работает» рисуются слева направо за 700мс, сумма
+     появляется следом (задержка в JS = длительности отрисовки точек). */
+  [data-reveal-dots] {
+    transition: transform 700ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  [data-reveal-row].is-revealed [data-reveal-dots] {
+    transform: translateY(-0.28em) scaleX(1);
+  }
+  [data-reveal-amount] {
+    opacity: 0;
+    transform: translateY(4px);
+    transition: opacity 350ms cubic-bezier(0.16, 1, 0.3, 1), transform 350ms cubic-bezier(0.16, 1, 0.3, 1);
+    transition-delay: 700ms;
+  }
+  [data-reveal-row].is-revealed [data-reveal-amount] {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    [data-reveal-section],
+    [data-reveal],
+    [data-reveal-row],
+    [data-reveal-dots],
+    [data-reveal-amount] {
+      transition: none !important;
+      transform: none !important;
+      opacity: 1 !important;
+    }
   }
 
   /* ── Штамп «ПРОБИТО» ── */

@@ -1,9 +1,8 @@
-import { ScreenshotFrame } from "./ScreenshotFrame";
+import { Section, SectionHeading } from "./Section";
+import { ProductScreenshot } from "./ProductScreenshot";
 
-// Единственное место на странице, где живёт мотив чека — узкая, физически
-// более плотная карточка на фоне спокойной широкой страницы. Контраст ширины
-// сам говорит «здесь особое», без нужды стилизовать всё вокруг. Если эту
-// карточку убрать — страница остаётся нормальной страницей.
+// Фирменный элемент — сохранён полностью, перекрашен под новую палитру:
+// суммы справа зелёным --signal вместо прежнего терракотового акцента.
 const ROWS = [
   { code: "СКАН-01", body: "Пробиваете обычным сканером — или камерой телефона, если сканера ещё нет", effect: "без терминала за 40 000 ₽" },
   { code: "ОСТАТОК-02", body: "Каждая продажа сразу списывает остаток нужной позиции", effect: "видно в реальном времени" },
@@ -13,28 +12,29 @@ const ROWS = [
 
 export function HowItWorksSection() {
   return (
-    <section className="max-w-[1180px] mx-auto px-4 sm:px-6 py-14 sm:py-20">
-      <h2 className="font-landing-display font-semibold text-land-graphite text-2xl sm:text-3xl tracking-tight mb-8 text-center">
-        Как это работает
-      </h2>
+    <Section tone="paper">
+      <SectionHeading className="mb-16">Как это работает</SectionHeading>
 
-      <div className="max-w-[600px] mx-auto bg-land-ash-deep border border-land-graphite/15 rounded-tag receipt-torn">
-        <div className="px-5 sm:px-7 pt-5 pb-1">
-          {ROWS.map((row) => (
-            <div key={row.code} className="py-3.5 border-b border-dashed border-land-graphite/15 last:border-b-0">
-              <div className="flex items-baseline">
-                <span className="font-landing-mono tabular-nums text-xs text-land-graphite-soft">{row.code}</span>
-                <span className="leader-land" aria-hidden />
-                <span className="font-landing-mono tabular-nums text-xs text-land-signal-text shrink-0 text-right">{row.effect}</span>
+      <div className="grid lg:grid-cols-[1fr_1fr] gap-10 lg:gap-16 items-center">
+        <div data-reveal className="bg-land-surface border border-land-line rounded-land-card shadow-land-card receipt-torn">
+          <div className="px-6 sm:px-8 pt-6 pb-2">
+            {ROWS.map((row, i) => (
+              <div key={row.code} className="py-4 border-b border-dashed border-land-line last:border-b-0" data-reveal-row data-reveal-delay={i}>
+                <div className="flex items-baseline">
+                  <span className="font-landing-mono text-land-mono-sm tracking-[0.04em] text-land-muted">{row.code}</span>
+                  <span className="leader-land" aria-hidden data-reveal-dots />
+                  <span className="font-landing-mono text-land-mono-sm tracking-[0.04em] text-land-signal shrink-0 text-right" data-reveal-amount>
+                    {row.effect}
+                  </span>
+                </div>
+                <p className="font-landing-text text-land-body text-land-ink mt-1.5">{row.body}</p>
               </div>
-              <p className="font-landing-text text-[15px] text-land-graphite leading-snug mt-1">{row.body}</p>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-        <div className="px-5 sm:px-7 pb-6 pt-4">
-          <ScreenshotFrame label="дашборд владельца с аналитикой" aspect="aspect-[16/10]" />
-        </div>
+
+        <ProductScreenshot file="owner.png" alt="Дашборд владельца с аналитикой продаж" label="дашборд владельца с аналитикой" aspect="aspect-[4/3]" />
       </div>
-    </section>
+    </Section>
   );
 }
