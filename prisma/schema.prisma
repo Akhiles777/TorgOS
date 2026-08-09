@@ -41,29 +41,57 @@ enum PaymentMethod {
   TRANSFER
 }
 
+// Статус подписки. Пока нет реального эквайринга: PAST_DUE/SUSPENDED —
+// результат автоматической ежедневной проверки (истёк триал и т.д.), не
+// оплаты. ACTIVE недостижим до подключения реального биллинга — оставлен
+// для будущего, чтобы схему не пришлось трогать повторно.
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  SUSPENDED
+}
+
 model Organization {
   id         String      @id @default(cuid())
   name       String
   type       OrgType
+  // plan — он же «currentPlan» из брифа: тариф организации. Отдельного
+  // одноимённого поля не заводим, было бы дублированием.
   plan       Plan        @default(TRIAL)
   createdAt  DateTime    @default(now())
   stores     Store[]
   users      User[]
   aiBriefing AiBriefing?
+
+  // Биллинг-каркас (без реального списания денег — см. server/guard.ts::assertSubscriptionActive)
+  subscriptionStatus  SubscriptionStatus @default(TRIAL)
+  trialEndsAt         DateTime?
+  pastDueSince        DateTime?
+  nextPaymentAt       DateTime?
+  trialReminderSentAt DateTime?
 }
 
 model Store {
-  id             String       @id @default(cuid())
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  name           String
-  address        String
-  users          User[]
-  products       Product[]
-  sales          Sale[]
-  suppliers      Supplier[]
-  employees      Employee[]
-  shifts         Shift[]
+  id                String             @id @default(cuid())
+  organizationId    String
+  organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name              String
+  address           String
+  // Город — для супер-админки (фильтр/поиск) и регионализации; отдельно от
+  // address, который остаётся полной строкой адреса.
+  city              String?
+  // IANA-зона точки, для расчёта кассового дня (server/services/shift.ts)
+  // и отображения дат/времени в местном времени владельца.
+  timezone          String             @default("Europe/Moscow")
+  users             User[]
+  products          Product[]
+  sales             Sale[]
+  suppliers         Supplier[]
+  employees         Employee[]
+  shifts            Shift[]
+  inventorySessions InventorySession[]
 
   @@index([organizationId])
 }
@@ -99,51 +127,67 @@ model Shift {
 }
 
 model User {
-  id             String          @id @default(cuid())
-  organizationId String
-  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  storeId        String?
-  store          Store?          @relation(fields: [storeId], references: [id])
-  role           Role
-  name           String
-  login          String          @unique
-  passwordHash   String
-  createdAt      DateTime        @default(now())
-  sessions       Session[]
-  sales          Sale[]
-  movements      StockMovement[]
+  id                       String             @id @default(cuid())
+  organizationId           String
+  organization             Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  storeId                  String?
+  store                    Store?             @relation(fields: [storeId], references: [id])
+  role                     Role
+  name                     String
+  login                    String             @unique
+  passwordHash             String
+  createdAt                DateTime           @default(now())
+  sessions                 Session[]
+  sales                    Sale[]
+  movements                StockMovement[]
+  inventorySessionsStarted InventorySession[]
+
+  // Самостоятельная регистрация (/register): email = логин владельца.
+  // Nullable — у сотрудников, заведённых владельцем внутри кабинета,
+  // почты может не быть вовсе.
+  email                    String?   @unique
+  emailVerifiedAt          DateTime?
+  emailVerifyCode          String?
+  emailVerifyCodeExpiresAt DateTime?
 
   @@index([organizationId])
 }
 
 // id — sha256-хэш токена; сам токен живёт только в cookie
 model Session {
-  id        String   @id
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  expiresAt DateTime
+  id                         String   @id
+  userId                     String
+  user                       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt                  DateTime
+  // Если задано — эта сессия создана супер-админом через «войти как» (impersonation),
+  // не логином пользователя. AppShell показывает баннер с кнопкой возврата.
+  // Прямой relation на SuperAdmin не заводим (это единственная связь обычных
+  // моделей с супер-админскими — держим её слабой, по id, чтобы не тянуть
+  // SuperAdmin в tenant-граф).
+  impersonatedBySuperAdminId String?
 }
 
 model Product {
-  id        String          @id @default(cuid())
-  storeId   String
-  store     Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  barcode   String?
-  name      String
-  price     Decimal         @db.Decimal(10, 2)
-  costPrice Decimal         @db.Decimal(10, 2)
-  unit      Unit            @default(PCS)
-  category  String
-  expiry    DateTime?
-  stock     Decimal         @default(0) @db.Decimal(10, 3)
-  isActive  Boolean         @default(true)
+  id             String          @id @default(cuid())
+  storeId        String
+  store          Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  barcode        String?
+  name           String
+  price          Decimal         @db.Decimal(10, 2)
+  costPrice      Decimal         @db.Decimal(10, 2)
+  unit           Unit            @default(PCS)
+  category       String
+  expiry         DateTime?
+  stock          Decimal         @default(0) @db.Decimal(10, 3)
+  isActive       Boolean         @default(true)
   // Показывать плиткой в правом меню кассы (для товаров без штрихкода или
   // тех, что неудобно сканировать — тяжёлые бутылки воды и т.п.). По умолчанию
   // выключено: касса работает сканером, а плитки — только для избранного.
-  showInPos Boolean         @default(false)
-  createdAt DateTime        @default(now())
-  movements StockMovement[]
-  saleItems SaleItem[]
+  showInPos      Boolean         @default(false)
+  createdAt      DateTime        @default(now())
+  movements      StockMovement[]
+  saleItems      SaleItem[]
+  inventoryLines InventoryLine[]
 
   @@unique([storeId, barcode])
   @@index([storeId, category])
@@ -227,4 +271,78 @@ model Supplier {
   notes   String?
 
   @@index([storeId])
+}
+
+// ── Инвентаризация ──────────────────────────────────────────────────────
+// Пересчёт остатков по точке: сканируешь товар, вводишь фактическое
+// количество, в конце — отчёт по расхождениям и кнопка «Применить»
+// (создаёт StockMovement на каждую расходящуюся строку).
+model InventorySession {
+  id          String          @id @default(cuid())
+  storeId     String
+  store       Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  startedById String
+  startedBy   User            @relation(fields: [startedById], references: [id])
+  startedAt   DateTime        @default(now())
+  finishedAt  DateTime?
+  lines       InventoryLine[]
+
+  @@index([storeId, startedAt])
+}
+
+model InventoryLine {
+  id          String           @id @default(cuid())
+  sessionId   String
+  session     InventorySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product          @relation(fields: [productId], references: [id])
+  // Остаток по базе на момент скана — фиксируется сразу, чтобы параллельная
+  // продажа на кассе не «съела» разницу, пока считаем.
+  expectedQty Decimal          @db.Decimal(10, 3)
+  countedQty  Decimal          @db.Decimal(10, 3)
+  countedAt   DateTime         @default(now())
+
+  @@unique([sessionId, productId])
+  @@index([sessionId])
+}
+
+// ── Супер-админка (уровень выше организаций, только для основателя) ────
+// Полностью отдельный стек аутентификации: своя кука (torgos_root_session),
+// свои сессии, ноль пересечений с обычными User/Session. Через /register
+// такую учётку создать нельзя — только скриптом `npm run create-superadmin`.
+// Единственное место в проекте, где код намеренно работает с сырым `prisma`,
+// а не tenantDb — супер-админу по определению нужен доступ ко всем организациям.
+model SuperAdmin {
+  id           String               @id @default(cuid())
+  email        String               @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime             @default(now())
+  lastLoginAt  DateTime?
+  sessions     SuperAdminSession[]
+  auditLogs    SuperAdminAuditLog[]
+}
+
+model SuperAdminSession {
+  id           String     @id // sha256(токена) — та же схема, что у обычной Session
+  superAdminId String
+  superAdmin   SuperAdmin @relation(fields: [superAdminId], references: [id], onDelete: Cascade)
+  expiresAt    DateTime
+}
+
+// Только для чтения даже мной — журнал действий супер-админа: смена тарифа,
+// продление триала, приостановка/удаление организации, impersonation,
+// сброс пароля. targetType/targetId — полиморфная ссылка (Organization/User).
+model SuperAdminAuditLog {
+  id           String     @id @default(cuid())
+  superAdminId String
+  superAdmin   SuperAdmin @relation(fields: [superAdminId], references: [id])
+  action       String
+  targetType   String
+  targetId     String
+  meta         Json?
+  createdAt    DateTime   @default(now())
+
+  @@index([superAdminId, createdAt])
+  @@index([targetType, targetId])
 }

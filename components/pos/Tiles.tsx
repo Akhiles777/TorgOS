@@ -1,6 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { money0, unitLabel } from "@/lib/format";
+import { SegmentedControl } from "@/components/ui";
 import type { PosProduct } from "./types";
 
 // Панель быстрого выбора справа. Без поиска — только избранные плитки
@@ -67,20 +68,20 @@ export function Tiles({
         key={p.id}
         onClick={() => onPick(p)}
         disabled={out}
-        className="relative text-left min-h-[92px] p-3 rounded-tag border border-line bg-paper-2 hover:border-ink active:scale-[0.98] transition flex flex-col justify-between disabled:opacity-50"
+        className="relative text-left min-h-[92px] p-3 rounded-tag border border-line bg-paper-2 hover:border-ink active:scale-[0.98] transition flex flex-col justify-between disabled:opacity-50 font-app-text"
       >
-        <span className="font-medium leading-tight text-[15px] line-clamp-3">{p.name}</span>
+        <span className="font-medium leading-tight text-base line-clamp-3">{p.name}</span>
         <span className="flex items-baseline justify-between mt-2">
-          <span className="font-mono-nums font-semibold tabular-nums">
+          <span className="font-app-mono font-semibold tabular-nums">
             {money0(p.price)}
             <span className="text-ink-soft text-xs">/{unitLabel(p.unit)}</span>
           </span>
           {p.unit === "KG" && <span className="text-[10px] text-ink-soft uppercase">вес</span>}
         </span>
         {out ? (
-          <span className="absolute top-1.5 right-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-stamp/15 text-stamp">нет</span>
+          <span className="absolute top-1.5 right-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-stamp/15 text-stamp-text">нет</span>
         ) : low ? (
-          <span className="absolute top-1.5 right-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-warn/15 text-warn">мало</span>
+          <span className="absolute top-1.5 right-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-warn/15 text-warn-text">мало</span>
         ) : null}
       </button>
     );
@@ -89,18 +90,13 @@ export function Tiles({
   return (
     <div className="flex flex-col h-full">
       {!searching && (
-        <div className="flex gap-2 overflow-x-auto pb-3 -mx-1 px-1">
-          {categories.map((c) => (
-            <button
-              key={c}
-              onClick={() => setCat(c)}
-              className={`shrink-0 h-11 px-4 rounded-tag border text-sm font-medium transition-colors ${
-                cat === c ? "bg-ink text-paper border-ink" : "bg-paper border-line hover:bg-paper-2"
-              }`}
-            >
-              {c}
-            </button>
-          ))}
+        <div className="overflow-x-auto pb-3 -mx-1 px-1 font-app-text">
+          <SegmentedControl
+            size="cash"
+            value={cat}
+            onChange={setCat}
+            options={categories.map((c) => ({ value: c, label: c }))}
+          />
         </div>
       )}
 
@@ -110,14 +106,14 @@ export function Tiles({
             {shown.map(renderTile)}
           </div>
         ) : searching ? (
-          <div className="text-center py-8">
-            <p className="text-ink-soft mb-3">По запросу «{query.trim()}» ничего не нашлось.</p>
+          <div className="text-center py-8 font-app-text">
+            <p className="text-ink-soft mb-3 text-base">По запросу «{query.trim()}» ничего не нашлось.</p>
             <button
               onClick={runAi}
               disabled={aiBusy}
-              className="h-11 px-4 rounded-tag bg-ink text-paper font-medium disabled:opacity-50"
+              className="h-14 px-5 rounded-tag bg-ink text-paper font-medium disabled:opacity-50"
             >
-              {aiBusy ? "ИИ ищет…" : "🔍 Спросить ИИ"}
+              {aiBusy ? "ИИ ищет…" : "Спросить ИИ"}
             </button>
             {aiIds && aiProducts.length > 0 && (
               <>
@@ -132,7 +128,7 @@ export function Tiles({
             )}
           </div>
         ) : (
-          <p className="text-ink-soft text-center py-10 px-6 leading-relaxed">
+          <p className="text-ink-soft text-center py-10 px-6 leading-relaxed font-app-text text-base">
             Здесь — товары для быстрого выбора без сканера.<br />
             Включите «Показывать в кассе» у нужных товаров в админке.
           </p>

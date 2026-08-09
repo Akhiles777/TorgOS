@@ -10,9 +10,11 @@ export async function registerAction(_prev: unknown, formData: FormData) {
     orgType: (String(formData.get("orgType") ?? "RETAIL") as OrgType),
     storeName: String(formData.get("storeName") ?? ""),
     storeAddress: String(formData.get("storeAddress") ?? ""),
+    storeCity: String(formData.get("storeCity") ?? ""),
     ownerName: String(formData.get("ownerName") ?? ""),
-    login: String(formData.get("login") ?? ""),
+    email: String(formData.get("email") ?? ""),
     password: String(formData.get("password") ?? ""),
+    demoProducts: formData.get("demoProducts") === "on",
   };
   try {
     const { owner } = await registerOrganization(input);

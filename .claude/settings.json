@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(echo \"=== exit: $? ===\")",
+      "Bash(npm view *)",
+      "Bash(npm search *)",
+      "Bash(curl -s http://localhost:3000/_next/static/chunks/node_modules_%40fontsource_1pxvwc3._.css)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code} %{content_type} %{size_download} bytes\\\\n\" \"http://localhost:3000/_next/static/media/pt-sans-cyrillic-400-normal.1gsdfrk2yk36b.woff2\")",
+      "Bash(npx --no-install playwright --version)",
+      "Bash(pkill -f \"node server.mjs\")",
+      "Bash(python3 -)",
+      "Bash(npm install *)"
+    ]
+  }
+}

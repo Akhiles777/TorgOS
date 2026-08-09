@@ -1,7 +1,7 @@
 "use client";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui";
+import { Button, EmptyState, ConfirmDialog } from "@/components/ui";
 import { Overlay } from "@/components/pos/WeightModal";
 import { createEmployeeAction, deactivateEmployeeAction } from "../actions";
 
@@ -12,10 +12,13 @@ type Employee = { id: string; name: string };
 export function EmployeesManager({ employees }: { employees: Employee[] }) {
   const router = useRouter();
   const [adding, setAdding] = useState(false);
+  const [removing, setRemoving] = useState<Employee | null>(null);
   const [pending, start] = useTransition();
 
-  const remove = (id: string, name: string) => {
-    if (!confirm(`Убрать «${name}» из списка смен? История его продаж сохранится.`)) return;
+  const remove = () => {
+    if (!removing) return;
+    const id = removing.id;
+    setRemoving(null);
     start(async () => {
       await deactivateEmployeeAction(id);
       router.refresh();
@@ -34,20 +37,18 @@ export function EmployeesManager({ employees }: { employees: Employee[] }) {
       </p>
 
       {employees.length === 0 ? (
-        <p className="text-ink-soft py-6 text-center bg-paper-2 border border-line rounded-tag">
-          Пока никого. Добавьте, кто стоит за кассой.
-        </p>
+        <EmptyState>Пока никого. Добавьте, кто стоит за кассой.</EmptyState>
       ) : (
         <div className="grid gap-2 sm:grid-cols-2">
           {employees.map((e) => (
             <div key={e.id} className="border border-line rounded-tag bg-paper-2 p-3 flex items-center justify-between gap-2">
               <span className="font-medium">{e.name}</span>
               <button
-                onClick={() => remove(e.id, e.name)}
+                onClick={() => setRemoving(e)}
                 disabled={pending}
-                className="text-xs text-ink-soft hover:text-stamp px-2 py-1 disabled:opacity-50"
+                className="h-9 px-3 rounded-tag border border-line text-sm text-ink-soft hover:text-stamp-text hover:border-stamp disabled:opacity-50"
               >
-                убрать
+                Убрать
               </button>
             </div>
           ))}
@@ -55,6 +56,14 @@ export function EmployeesManager({ employees }: { employees: Employee[] }) {
       )}
 
       {adding && <AddEmployeeModal onClose={() => setAdding(false)} />}
+      <ConfirmDialog
+        open={!!removing}
+        title={`Убрать «${removing?.name}» из списка смен?`}
+        body="История его продаж сохранится — из вопроса «Кто на смене?» он просто пропадёт."
+        confirmLabel="Убрать"
+        onConfirm={remove}
+        onCancel={() => setRemoving(null)}
+      />
     </div>
   );
 }
@@ -81,7 +90,7 @@ function AddEmployeeModal({ onClose }: { onClose: () => void }) {
           <input name="name" required autoFocus placeholder="Например: Рита Юсупова"
             className="w-full h-11 px-3 bg-paper border border-line rounded-tag focus:border-ink" />
         </label>
-        {error && <p className="text-stamp text-sm">{error}</p>}
+        {error && <p className="text-stamp-text text-sm">{error}</p>}
         <div className="grid grid-cols-2 gap-3 pt-1">
           <Button type="button" variant="line" size="lg" onClick={onClose}>Отмена</Button>
           <Button type="submit" variant="stamp" size="lg" disabled={pending}>{pending ? "…" : "Добавить"}</Button>

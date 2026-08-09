@@ -41,6 +41,53 @@ function broadcast(storeId, updates, saleNumber) {
 globalThis.__torgosBroadcast = broadcast;
 globalThis.__torgosBroadcastMsg = (storeId, message) => sendToRoom(storeId, message);
 
+// Биллинг-каркас: раз при старте + затем каждые 6 часов (не раз в сутки —
+// см. дизайн-план Фазы 2, решение №2: при частых редеплоях таймер сбрасывается,
+// поэтому интервал короче суток, чтобы задержка не набегала на несколько дней).
+// Плейн JS, а не импорт из server/services — server.mjs запускается напрямую
+// через node, без TS-трансформации (тот же принцип, что уже применён к sha256/
+// cookie-парсингу выше: минимальная логика дублируется, а не импортируется).
+const REMINDER_WINDOW_MS = 2 * 24 * 3600_000; // напомнить за 2 дня до конца триала
+
+async function checkBilling() {
+  try {
+    const now = new Date();
+
+    // Триал закончился, статус ещё не обновлён — переводим в PAST_DUE.
+    const expired = await prisma.organization.findMany({
+      where: { subscriptionStatus: "TRIAL", trialEndsAt: { lt: now } },
+      select: { id: true, name: true },
+    });
+    if (expired.length) {
+      await prisma.organization.updateMany({
+        where: { id: { in: expired.map((o) => o.id) } },
+        data: { subscriptionStatus: "PAST_DUE", pastDueSince: now },
+      });
+      console.log(`[billing] триал истёк, PAST_DUE: ${expired.map((o) => o.name).join(", ")}`);
+    }
+
+    // Триал заканчивается в ближайшие 2 дня, напоминание ещё не отправляли —
+    // письмо-заглушка (реальный SMTP не подключён, см. server/email/sender.ts).
+    const soon = await prisma.organization.findMany({
+      where: {
+        subscriptionStatus: "TRIAL",
+        trialEndsAt: { gte: now, lte: new Date(now.getTime() + REMINDER_WINDOW_MS) },
+        trialReminderSentAt: null,
+      },
+      select: { id: true, name: true, trialEndsAt: true, users: { where: { role: "OWNER" }, select: { email: true }, take: 1 } },
+    });
+    for (const org of soon) {
+      const ownerEmail = org.users[0]?.email;
+      console.log(
+        `\n── Письмо (заглушка, SMTP не подключён) ──\nКому: ${ownerEmail ?? "(у владельца нет email)"}\nТема: Триал скоро закончится — ТоргОС\n\nБесплатный период «${org.name}» заканчивается ${org.trialEndsAt.toLocaleDateString("ru-RU")}. Продлите, чтобы касса не остановилась.\n───────────────────────────────────────────\n`,
+      );
+      await prisma.organization.update({ where: { id: org.id }, data: { trialReminderSentAt: now } });
+    }
+  } catch (err) {
+    console.error("[billing] ошибка периодической проверки:", err);
+  }
+}
+
 function parseCookie(header, name) {
   if (!header) return null;
   for (const part of header.split(";")) {
@@ -87,6 +134,11 @@ app.prepare().then(() => {
     console.log(`ТоргОС на http://localhost:${port} (WS /ws, ${dev ? "dev" : "prod"})`);
   });
 
+  // Раз при старте, затем каждые 6 часов — см. checkBilling выше.
+  checkBilling();
+  const billingTimer = setInterval(checkBilling, 6 * 3600_000);
+  billingTimer.unref();
+
   // Плавная остановка: при SIGTERM/SIGINT (docker stop, деплой) даём серверу
   // дожать текущие запросы и транзакции, закрываем WS и коннект к БД.
   // Незавершённая продажа либо докатывается в БД, либо целиком откатывается —
@@ -96,6 +148,7 @@ app.prepare().then(() => {
     if (shuttingDown) return;
     shuttingDown = true;
     console.log(`\n${signal}: останавливаюсь аккуратно…`);
+    clearInterval(billingTimer);
     for (const room of rooms.values()) for (const ws of room) ws.close(1001, "server shutdown");
     wss.close();
     server.close(async () => {

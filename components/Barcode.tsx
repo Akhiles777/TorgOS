@@ -44,7 +44,7 @@ function encodeEan8(ean: string): string {
 export function Barcode({ value, height = 56, className = "" }: { value: string; height?: number; className?: string }) {
   const is13 = /^\d{13}$/.test(value);
   const is8 = /^\d{8}$/.test(value);
-  if (!is13 && !is8) return <span className="text-xs text-stamp">неверный код</span>;
+  if (!is13 && !is8) return <span className="text-xs text-stamp-text">неверный код</span>;
   const bits = is13 ? encodeEan13(value) : encodeEan8(value);
   const unit = 2;
   const width = bits.length * unit;

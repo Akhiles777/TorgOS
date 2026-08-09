@@ -12,13 +12,33 @@ export function homeFor(role: Role): string {
   }
 }
 
+// Биллинг-каркас (без реального списания денег). ACTIVE недостижим до
+// подключения оплаты — практически это либо TRIAL (заблокирован, только если
+// trialEndsAt задан и уже прошёл), либо PAST_DUE/CANCELLED/SUSPENDED, куда
+// организацию переводит периодическая проверка в server.mjs.
+// Важно: trialEndsAt = null (все организации, заведённые до этой миграции,
+// включая продакшен) — НЕ блокируется. Блокировка возможна только для тех,
+// у кого дедлайн триала явно проставлен и прошёл.
+async function isBillingBlocked(db: ReturnType<typeof tenantDb>, organizationId: string): Promise<boolean> {
+  const org = await db.organization.findUnique({
+    where: { id: organizationId },
+    select: { subscriptionStatus: true, trialEndsAt: true },
+  });
+  if (!org) return false;
+  if (org.subscriptionStatus === "ACTIVE") return false;
+  if (org.subscriptionStatus === "TRIAL") return !!org.trialEndsAt && org.trialEndsAt.getTime() < Date.now();
+  return true; // PAST_DUE | CANCELLED | SUSPENDED
+}
+
 // Гард для страниц. Возвращает пользователя + tenant-ограниченный клиент.
 // Не та роль — редирект на «свой» дом, а не 403-заглушка.
 export async function requireRole(...allowed: Role[]): Promise<{ user: SessionUser; db: ReturnType<typeof tenantDb> }> {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   if (allowed.length && !allowed.includes(user.role)) redirect(homeFor(user.role));
-  return { user, db: tenantDb(user.organizationId) };
+  const db = tenantDb(user.organizationId);
+  if (await isBillingBlocked(db, user.organizationId)) redirect("/billing/expired");
+  return { user, db };
 }
 
 // Для страниц админки точки: ADMIN всегда привязан к storeId. У OWNER storeId
@@ -40,7 +60,9 @@ export async function requireApi(...allowed: Role[]): Promise<{ user: SessionUse
   const user = await getCurrentUser();
   if (!user) throw new AuthError(401, "Требуется вход");
   if (allowed.length && !allowed.includes(user.role)) throw new AuthError(403, "Недостаточно прав");
-  return { user, db: tenantDb(user.organizationId) };
+  const db = tenantDb(user.organizationId);
+  if (await isBillingBlocked(db, user.organizationId)) throw new AuthError(402, "Подписка приостановлена — обратитесь к владельцу");
+  return { user, db };
 }
 
 // Аналог requireStoreScope для Server Actions/API — бросает вместо редиректа.

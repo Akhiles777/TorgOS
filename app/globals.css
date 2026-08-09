@@ -6,15 +6,47 @@
   --color-paper: #f4efe6; /* фон — цвет термоленты/крафта */
   --color-paper-2: #ede6d8; /* второй план, дно ленты */
   --color-ink: #1c1a17; /* текст и цифры — «краска» матричного принтера */
-  --color-ink-soft: #6b655b; /* вторичный текст, подписи */
+  /* 7.2:1 на paper (было #6b655b → 5.0:1). Пересчитано под требование
+     «основной текст ≥7:1» — касса читается в т.ч. на солнце и с плохим зрением. */
+  --color-ink-soft: #544e47;
   --color-line: #d8cfbe; /* линии отрыва, перфорация, границы */
-  --color-stamp: #b23a22; /* фирменный сигнал: штамп «ПРОБИТО», действие */
+  --color-stamp: #b23a22; /* фирменный сигнал: штамп «ПРОБИТО», действие — заливки/бордеры */
   --color-stamp-ink: #fbf6ec; /* текст на штампе */
-  --color-fresh: #2e6b4f; /* «свежее», успех, положительная маржа */
-  --color-warn: #c98a1a; /* предупреждение: мало/скоро истечёт */
+  --color-fresh: #2e6b4f; /* «свежее», успех, положительная маржа — заливки/бордеры */
+  --color-warn: #c98a1a; /* предупреждение: мало/скоро истечёт — заливки/бордеры */
+
+  /* Текстовые версии акцентов — сами акценты выше это фон/бордер (там
+     достаточно 3:1), а когда цвет сам становится читаемым текстом (сумма,
+     статус, бейдж), нужен более тёмный тон под 7:1. warn-text — исключение,
+     see-below: довести жёлто-коричневый до 7:1 означало бы увести его в
+     тёмно-коричневый, где он перестаёт читаться как «внимание» — остановлен
+     на AA (4.5:1), рядом со значением всегда есть текст, не только цвет. */
+  --color-stamp-text: #902f1c; /* 7.0:1 на paper */
+  --color-fresh-text: #265942; /* 7.1:1 на paper */
+  --color-warn-text: #916313; /* 4.6:1 на paper — см. комментарий выше */
+
+  /* Те же акценты, но для текста НА тёмной панели (табло, см. ReadoutPanel) —
+     обычный fresh/warn темнее ink, на нём не читается вовсе (2.75:1/5.9:1). */
+  --color-fresh-on-dark: #58b78b; /* 7.1:1 на ink */
+  --color-warn-on-dark: #dd981d; /* 7.1:1 на ink */
+  --color-stamp-on-dark: #e68e7d; /* 7.1:1 на ink */
 
   --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: ui-monospace, "SF Mono", "SFMono-Regular", Consolas, monospace;
+
+  /* Только для публичного лендинга — самохостинг через @fontsource,
+     кириллица проверена. */
+  --font-landing-display: "PT Mono", var(--font-mono);
+  --font-landing-text: "PT Sans", var(--font-sans);
+
+  /* Приложение (касса/админка/кабинет) — отдельная пара от лендинга,
+     подобрана под другие условия (выгоревшая касса, мелкий кегль таблиц,
+     вечерний телефон), самохостинг через @fontsource, кириллица проверена.
+     Раскатывается по экранам постепенно (см. дизайн-план системы),
+     подключается там, где уже применена — не в globals.css целиком. */
+  --font-app-display: "Unbounded Variable", var(--font-sans); /* крупные числа, заголовки — сдержанно */
+  --font-app-text: "Golos Text Variable", var(--font-sans); /* рабочий текст, таблицы, кнопки */
+  --font-app-mono: "JetBrains Mono", var(--font-mono); /* колонки цифр */
 
   --radius-tag: 4px;
 }
@@ -93,6 +125,13 @@
   }
   .animate-tear { animation: tear-off 0.45s cubic-bezier(0.4, 0, 0.6, 1) forwards; }
 
+  /* Один продуманный момент на всю страницу — печать чека при заходе на лендинг */
+  @keyframes print-in {
+    from { transform: translateY(14px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  .animate-print-in { animation: print-in 0.5s cubic-bezier(0.2, 0.7, 0.3, 1); }
+
   @keyframes row-in {
     from { transform: translateX(-8px); opacity: 0; }
     to { transform: translateX(0); opacity: 1; }
@@ -109,6 +148,6 @@
   .animate-shake { animation: shake 0.32s ease-in-out; }
 
   @media (prefers-reduced-motion: reduce) {
-    .animate-tear, .animate-row-in, .animate-shake { animation: none !important; }
+    .animate-tear, .animate-row-in, .animate-shake, .animate-print-in { animation: none !important; }
   }
 }

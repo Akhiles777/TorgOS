@@ -1,17 +1,42 @@
 // Смены. Касса работает под одним логином, а «кто на смене» выбирается
-// одним тапом. Кассовый день начинается в 07:00 МСК: до 07:00 продажи
+// одним тапом. Кассовый день начинается в 07:00 по МЕСТНОМУ времени точки
+// (Store.timezone, IANA-зона, по умолчанию Europe/Moscow): до 07:00 продажи
 // относятся к предыдущему дню (ночная доработка одной смены), после 07:00 —
 // начинается новый день и касса снова спрашивает, кто заступил.
 import type { TenantDb } from "../tenant";
+import { prisma } from "../db";
 
-const MSK_OFFSET_MS = 3 * 3600_000; // МСК = UTC+3
-const SHIFT_START_HOUR = 7; // граница суток — 07:00 МСК
+const SHIFT_START_HOUR = 7; // граница суток — 07:00 по местному времени точки
+const DEFAULT_TIMEZONE = "Europe/Moscow";
+
+// Локальные Y-M-D-H в заданной IANA-зоне — через Intl, не через фиксированный
+// offset: корректно для любой зоны (в т.ч. с DST, хотя в РФ его сейчас нет).
+function localParts(now: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hour12: false,
+  }).formatToParts(now);
+  const get = (t: string) => parts.find((p) => p.type === t)!.value;
+  // "en-CA" отдаёт год-месяц-день в порядке YYYY-MM-DD — то, что нужно для ключа
+  return { y: get("year"), m: get("month"), d: get("day"), h: Number(get("hour") === "24" ? "0" : get("hour")) };
+}
 
 // Ключ кассового дня вида "2026-07-18": одинаков для всех моментов между
-// 07:00 МСК и 06:59:59 МСК следующего дня.
-export function currentShiftDay(now: Date = new Date()): string {
-  const shifted = new Date(now.getTime() + MSK_OFFSET_MS - SHIFT_START_HOUR * 3600_000);
-  return shifted.toISOString().slice(0, 10);
+// 07:00 и 06:59:59 следующего дня по местному времени точки.
+export function currentShiftDay(now: Date = new Date(), timezone: string = DEFAULT_TIMEZONE): string {
+  const { y, m, d, h } = localParts(now, timezone);
+  if (h < SHIFT_START_HOUR) {
+    // До 07:00 — ещё вчерашний кассовый день. Откатываемся на календарные сутки
+    // назад через Date-арифметику в UTC (сама зона тут не важна — нужен только
+    // корректный «минус один день» от уже известной локальной даты).
+    const prevDay = new Date(Date.UTC(Number(y), Number(m) - 1, Number(d)) - 86_400_000);
+    return prevDay.toISOString().slice(0, 10);
+  }
+  return `${y}-${m}-${d}`;
+}
+
+async function getStoreTimezone(storeId: string): Promise<string> {
+  const store = await prisma.store.findUnique({ where: { id: storeId }, select: { timezone: true } });
+  return store?.timezone || DEFAULT_TIMEZONE;
 }
 
 export type ShiftEmployee = { id: string; name: string };
@@ -28,7 +53,7 @@ export async function listEmployees(db: TenantDb, storeId: string): Promise<Shif
 
 // Кто сейчас на смене (последний выбор за текущий кассовый день) или null.
 export async function getCurrentShift(db: TenantDb, storeId: string): Promise<CurrentShift> {
-  const shiftDay = currentShiftDay();
+  const shiftDay = currentShiftDay(new Date(), await getStoreTimezone(storeId));
   const shift = await db.shift.findFirst({
     where: { storeId, shiftDay },
     orderBy: { createdAt: "desc" },
@@ -44,7 +69,8 @@ export class ShiftError extends Error {}
 export async function startShift(db: TenantDb, storeId: string, employeeId: string): Promise<ShiftEmployee> {
   const employee = await db.employee.findFirst({ where: { id: employeeId, storeId, active: true }, select: { id: true, name: true } });
   if (!employee) throw new ShiftError("Сотрудник не найден");
-  await db.shift.create({ data: { storeId, employeeId, shiftDay: currentShiftDay() } });
+  const shiftDay = currentShiftDay(new Date(), await getStoreTimezone(storeId));
+  await db.shift.create({ data: { storeId, employeeId, shiftDay } });
   return employee;
 }
 

@@ -22,6 +22,14 @@ export class TenantError extends Error {
 
 type Where = Record<string, unknown>;
 
+// SuperAdmin-модели намеренно НЕ проходят через tenantDb — супер-админу по
+// определению нужен доступ ко всем организациям (см. server/superAdminAuth.ts,
+// работает с сырым prisma). Если что-то по ошибке вызовет их через tenantDb —
+// падаем громко, а не молча утекаем поперёк арендаторов.
+const superAdminOnly = (): Where => {
+  throw new TenantError("SuperAdmin-модели не проходят через tenantDb — используйте prisma напрямую");
+};
+
 const TENANT_WHERE: Record<Prisma.ModelName, (orgId: string) => Where> = {
   Organization: (orgId) => ({ id: orgId }),
   Store: (orgId) => ({ organizationId: orgId }),
@@ -35,10 +43,15 @@ const TENANT_WHERE: Record<Prisma.ModelName, (orgId: string) => Where> = {
   AiBriefing: (orgId) => ({ organizationId: orgId }),
   Employee: (orgId) => ({ store: { organizationId: orgId } }),
   Shift: (orgId) => ({ store: { organizationId: orgId } }),
+  InventorySession: (orgId) => ({ store: { organizationId: orgId } }),
+  InventoryLine: (orgId) => ({ session: { store: { organizationId: orgId } } }),
+  SuperAdmin: superAdminOnly,
+  SuperAdminSession: superAdminOnly,
+  SuperAdminAuditLog: superAdminOnly,
 };
 
 // Скалярные внешние ключи, которые могут встретиться в data при create/update.
-type FkTarget = "store" | "product" | "sale" | "user" | "employee";
+type FkTarget = "store" | "product" | "sale" | "user" | "employee" | "inventorySession";
 const FK_TARGETS: Record<string, FkTarget> = {
   storeId: "store",
   productId: "product",
@@ -46,6 +59,7 @@ const FK_TARGETS: Record<string, FkTarget> = {
   userId: "user",
   cashierId: "user",
   employeeId: "employee",
+  sessionId: "inventorySession",
 };
 
 function collectFks(data: unknown, acc: Record<FkTarget, Set<string>>) {
@@ -63,7 +77,10 @@ function collectFks(data: unknown, acc: Record<FkTarget, Set<string>>) {
 
 async function assertFksBelongToOrg(orgId: string, data: unknown, organizationIdInData?: unknown) {
   if (organizationIdInData !== undefined && organizationIdInData !== orgId) throw new TenantError();
-  const acc = { store: new Set<string>(), product: new Set<string>(), sale: new Set<string>(), user: new Set<string>(), employee: new Set<string>() };
+  const acc = {
+    store: new Set<string>(), product: new Set<string>(), sale: new Set<string>(),
+    user: new Set<string>(), employee: new Set<string>(), inventorySession: new Set<string>(),
+  };
   collectFks(data, acc);
   const checks: Promise<void>[] = [];
   const check = (count: Promise<number>, expected: number) =>
@@ -73,6 +90,7 @@ async function assertFksBelongToOrg(orgId: string, data: unknown, organizationId
   if (acc.sale.size) check(prisma.sale.count({ where: { id: { in: [...acc.sale] }, store: { organizationId: orgId } } }), acc.sale.size);
   if (acc.user.size) check(prisma.user.count({ where: { id: { in: [...acc.user] }, organizationId: orgId } }), acc.user.size);
   if (acc.employee.size) check(prisma.employee.count({ where: { id: { in: [...acc.employee] }, store: { organizationId: orgId } } }), acc.employee.size);
+  if (acc.inventorySession.size) check(prisma.inventorySession.count({ where: { id: { in: [...acc.inventorySession] }, store: { organizationId: orgId } } }), acc.inventorySession.size);
   await Promise.all(checks);
 }
 

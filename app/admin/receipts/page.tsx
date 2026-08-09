@@ -12,7 +12,7 @@ export default async function ReceiptsPage() {
   const { rows, totals } = await listReceiptsForDay(db, storeId);
 
   return (
-    <AppShell role={user.role} userName={user.name} active="admin">
+    <AppShell role={user.role} userName={user.name} active="admin" email={user.email} emailVerifiedAt={user.emailVerifiedAt}>
       <AdminTabs />
       <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 mb-4">
         <h1 className="text-xl font-semibold">Чеки за сегодня</h1>
@@ -31,7 +31,7 @@ function Mini({ label, value }: { label: string; value: number }) {
   return (
     <div className="bg-paper-2 border border-line rounded-tag px-3 py-2">
       <div className="text-xs text-ink-soft">{label}</div>
-      <div className="font-mono-nums font-semibold">{money0(value)}</div>
+      <div className="font-app-mono font-semibold">{money0(value)}</div>
     </div>
   );
 }

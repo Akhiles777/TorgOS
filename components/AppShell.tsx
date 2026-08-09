@@ -1,8 +1,14 @@
+// Шрифты приложения — та же пара, что подключена в /pos (см. дизайн-план системы).
+import "@fontsource-variable/unbounded/wght.css";
+import "@fontsource-variable/golos-text/wght.css";
+import "@fontsource/jetbrains-mono/400.css";
+import "@fontsource/jetbrains-mono/700.css";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import type { Role } from "@prisma/client";
 import { logoutAction } from "@/app/logout/action";
 import { RestockBanner } from "@/components/RestockBanner";
+import { EmailVerifyBanner } from "@/components/EmailVerifyBanner";
 
 // Каркас админки и кабинета. Касса своего каркаса не имеет — там всё подчинено чеку.
 export function AppShell({
@@ -10,11 +16,15 @@ export function AppShell({
   userName,
   active,
   children,
+  email,
+  emailVerifiedAt,
 }: {
   role: Role;
   userName: string;
   active: "admin" | "owner";
   children: ReactNode;
+  email?: string | null;
+  emailVerifiedAt?: Date | null;
 }) {
   const links: { href: string; label: string; show: boolean }[] = [
     { href: "/owner", label: "Кабинет", show: role === "OWNER" },
@@ -23,11 +33,12 @@ export function AppShell({
   ];
 
   return (
-    <div className="min-h-[100dvh] flex flex-col">
+    <div className="min-h-[100dvh] flex flex-col font-app-text">
+      {email && !emailVerifiedAt && <EmailVerifyBanner email={email} />}
       <RestockBanner />
       <header className="sticky top-0 z-30 bg-paper/95 backdrop-blur border-b border-line">
         <div className="max-w-6xl mx-auto px-3 sm:px-4 h-14 flex items-center gap-2 sm:gap-4">
-          <span className="font-mono-nums font-bold text-base sm:text-lg shrink-0">ТоргОС</span>
+          <span className="font-app-display font-bold text-base sm:text-lg shrink-0">ТоргОС</span>
           <nav className="flex gap-1 flex-1 overflow-x-auto">
             {links.filter((l) => l.show).map((l) => (
               <Link
@@ -45,7 +56,7 @@ export function AppShell({
           </nav>
           <span className="text-sm text-ink-soft hidden sm:block">{userName}</span>
           <form action={logoutAction} className="shrink-0">
-            <button type="submit" className="text-sm text-ink-soft hover:text-stamp px-1.5 sm:px-2">
+            <button type="submit" className="text-sm text-ink-soft hover:text-stamp-text px-1.5 sm:px-2">
               Выйти
             </button>
           </form>

@@ -2,12 +2,7 @@ import { getAiBriefing, parseBriefing } from "@/server/insights/ai";
 import type { TenantDb } from "@/server/tenant";
 import type { OwnerDashboard } from "@/server/services/analytics";
 import { refreshAiBriefingAction } from "./actions";
-
-const SEVERITY_STYLE = {
-  danger: { bar: "bg-stamp", mark: "!" },
-  warn: { bar: "bg-warn", mark: "▲" },
-  info: { bar: "bg-ink/40", mark: "i" },
-} as const;
+import { SEVERITY_TONE } from "./InsightCard";
 
 // Асинхронный Server Component, стримится через <Suspense> в page.tsx —
 // медленный или упавший вызов RouterAI не блокирует рендер остальных цифр.
@@ -38,7 +33,7 @@ export async function AiBriefingSection({
           </span>
         </div>
         <form action={refreshAiBriefingAction}>
-          <button type="submit" className="text-xs text-ink-soft hover:text-stamp underline underline-offset-2">
+          <button type="submit" className="text-xs text-ink-soft hover:text-stamp-text underline underline-offset-2">
             Обновить
           </button>
         </form>
@@ -68,7 +63,7 @@ function AiBriefingBody({ content }: { content: string }) {
       {parsed.points.length > 0 && (
         <div className="grid gap-2 sm:grid-cols-2">
           {parsed.points.map((p, i) => {
-            const tone = SEVERITY_STYLE[p.severity];
+            const tone = SEVERITY_TONE[p.severity];
             return (
               <div key={i} className="relative bg-paper border border-line rounded-tag overflow-hidden">
                 <span className={`absolute left-0 top-0 bottom-0 w-1.5 ${tone.bar}`} aria-hidden />

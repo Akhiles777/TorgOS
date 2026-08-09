@@ -1,7 +1,7 @@
 "use client";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Button, DecimalField } from "@/components/ui";
+import { Button, DecimalField, SegmentedControl, EmptyState, ConfirmDialog } from "@/components/ui";
 import { Barcode } from "@/components/Barcode";
 import { money, money0, qty, unitLabel, parseRuNumber } from "@/lib/format";
 import type { ProductRow, ProductFilter } from "@/server/services/products";
@@ -22,9 +22,17 @@ export function ProductsManager({ products, filter, query }: { products: Product
   const [, startAction] = useTransition();
 
   // Удаление из базы. Если товар уже в чеках — сервис откажет, и мы предлагаем
-  // снять с продажи: история продаж важнее, чем чистота справочника.
-  const remove = (p: ProductRow) => {
-    if (!confirm(`Удалить «${p.name}» из базы?\n\nОтменить будет нельзя.`)) return;
+  // снять с продажи: история продаж важнее, чем чистота справочника. Два шага —
+  // два брендированных ConfirmDialog вместо цепочки native confirm().
+  const [deleteTarget, setDeleteTarget] = useState<ProductRow | null>(null);
+  const [deactivateOffer, setDeactivateOffer] = useState<{ product: ProductRow; reason: string } | null>(null);
+
+  const remove = (p: ProductRow) => setDeleteTarget(p);
+
+  const confirmDelete = () => {
+    if (!deleteTarget) return;
+    const p = deleteTarget;
+    setDeleteTarget(null);
     setBusyId(p.id);
     startAction(async () => {
       const res = await deleteProductAction(p.id);
@@ -33,10 +41,17 @@ export function ProductsManager({ products, filter, query }: { products: Product
         router.refresh();
         return;
       }
-      if (confirm(`${res.error}\n\nСнять «${p.name}» с продажи вместо удаления?`)) {
-        await toggleActiveAction(p.id, false);
-        router.refresh();
-      }
+      setDeactivateOffer({ product: p, reason: res.error });
+    });
+  };
+
+  const confirmDeactivate = () => {
+    if (!deactivateOffer) return;
+    const p = deactivateOffer.product;
+    setDeactivateOffer(null);
+    startAction(async () => {
+      await toggleActiveAction(p.id, false);
+      router.refresh();
     });
   };
 
@@ -79,20 +94,15 @@ export function ProductsManager({ products, filter, query }: { products: Product
         <Button variant="stamp" onClick={() => setEditing("new")}>+ Товар</Button>
       </div>
 
-      <div className="flex flex-wrap gap-2 mb-4">
-        {(Object.keys(FILTER_LABELS) as ProductFilter[]).map((f) => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={`h-9 px-3 rounded-tag border text-sm ${filter === f ? "bg-ink text-paper border-ink" : "bg-paper border-line hover:bg-paper-2"}`}
-          >
-            {FILTER_LABELS[f]}
-          </button>
-        ))}
-      </div>
+      <SegmentedControl
+        className="mb-4"
+        value={filter}
+        onChange={setFilter}
+        options={(Object.keys(FILTER_LABELS) as ProductFilter[]).map((f) => ({ value: f, label: FILTER_LABELS[f] }))}
+      />
 
       {products.length === 0 ? (
-        <p className="text-ink-soft py-10 text-center bg-paper-2 border border-line rounded-tag">Ничего не найдено по этому фильтру.</p>
+        <EmptyState>Ничего не найдено по этому фильтру.</EmptyState>
       ) : (
         <>
           {/* Десктоп/планшет — таблица (без изменений) */}
@@ -116,16 +126,16 @@ export function ProductsManager({ products, filter, query }: { products: Product
                     <tr key={p.id} className="border-t border-line hover:bg-paper-2/50">
                       <td className="px-3 py-2">
                         <div className="font-medium">{p.name}</div>
-                        <div className="font-mono-nums text-xs text-ink-soft">{p.barcode ?? "без штрихкода"}</div>
+                        <div className="font-app-mono text-xs text-ink-soft">{p.barcode ?? "без штрихкода"}</div>
                       </td>
                       <td className="px-3 py-2 text-ink-soft">{p.category}</td>
-                      <td className="px-3 py-2 text-right font-mono-nums">{money0(p.price)}</td>
-                      <td className="px-3 py-2 text-right font-mono-nums text-ink-soft">{money0(p.costPrice)}</td>
-                      <td className="px-3 py-2 text-right font-mono-nums">
-                        <span className={p.marginPct < 15 ? "text-stamp" : "text-fresh"}>{p.marginPct}%</span>
+                      <td className="px-3 py-2 text-right font-app-mono">{money0(p.price)}</td>
+                      <td className="px-3 py-2 text-right font-app-mono text-ink-soft">{money0(p.costPrice)}</td>
+                      <td className="px-3 py-2 text-right font-app-mono">
+                        <span className={p.marginPct < 15 ? "text-stamp-text" : "text-fresh-text"}>{p.marginPct}%</span>
                       </td>
-                      <td className="px-3 py-2 text-right font-mono-nums">
-                        <span className={low ? "text-warn font-semibold" : ""}>{qty(p.stock, p.unit)} {unitLabel(p.unit)}</span>
+                      <td className="px-3 py-2 text-right font-app-mono">
+                        <span className={low ? "text-warn-text font-semibold" : ""}>{qty(p.stock, p.unit)} {unitLabel(p.unit)}</span>
                       </td>
                       <td className="px-3 py-2">
                         <div className="flex gap-1 justify-end items-center">
@@ -154,15 +164,15 @@ export function ProductsManager({ products, filter, query }: { products: Product
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <div className="font-medium leading-tight">{p.name}</div>
-                      <div className="font-mono-nums text-xs text-ink-soft mt-0.5">{p.category} · {p.barcode ?? "без штрихкода"}</div>
+                      <div className="font-app-mono text-xs text-ink-soft mt-0.5">{p.category} · {p.barcode ?? "без штрихкода"}</div>
                     </div>
                     <div className="text-right shrink-0">
-                      <div className="font-mono-nums font-semibold">{money0(p.price)} ₽</div>
-                      <div className={`font-mono-nums text-xs ${p.marginPct < 15 ? "text-stamp" : "text-fresh"}`}>наценка {p.marginPct}%</div>
+                      <div className="font-app-mono font-semibold">{money0(p.price)} ₽</div>
+                      <div className={`font-app-mono text-xs ${p.marginPct < 15 ? "text-stamp-text" : "text-fresh-text"}`}>наценка {p.marginPct}%</div>
                     </div>
                   </div>
                   <div className="flex items-center justify-between mt-2.5">
-                    <span className={`font-mono-nums text-sm ${low ? "text-warn font-semibold" : "text-ink-soft"}`}>
+                    <span className={`font-app-mono text-sm ${low ? "text-warn-text font-semibold" : "text-ink-soft"}`}>
                       Остаток: {qty(p.stock, p.unit)} {unitLabel(p.unit)}
                     </span>
                     <div className="flex gap-1.5 items-center">
@@ -185,6 +195,24 @@ export function ProductsManager({ products, filter, query }: { products: Product
       {editing && <ProductModal product={editing === "new" ? null : editing} onClose={() => setEditing(null)} />}
       {moving && <MoveModal product={moving} onClose={() => setMoving(null)} />}
       {printing && printing.barcode && <PrintModal product={printing} onClose={() => setPrinting(null)} />}
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title={`Удалить «${deleteTarget?.name}» из базы?`}
+        body="Отменить будет нельзя."
+        confirmLabel="Удалить"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
+      <ConfirmDialog
+        open={!!deactivateOffer}
+        title={`Снять «${deactivateOffer?.product.name}» с продажи?`}
+        body={`${deactivateOffer?.reason} Товар останется в базе, но пропадёт из кассы.`}
+        confirmLabel="Снять с продажи"
+        danger={false}
+        onConfirm={confirmDeactivate}
+        onCancel={() => setDeactivateOffer(null)}
+      />
     </div>
   );
 }
@@ -200,7 +228,7 @@ function IconBtn({
       disabled={disabled}
       className={`w-8 h-8 shrink-0 grid place-items-center rounded-tag border disabled:opacity-40 ${
         danger
-          ? "border-stamp/40 text-stamp hover:bg-stamp hover:text-stamp-ink hover:border-stamp"
+          ? "border-stamp/40 text-stamp-text hover:bg-stamp hover:text-stamp-ink hover:border-stamp"
           : "border-line hover:border-ink hover:bg-paper"
       }`}
     >
@@ -262,14 +290,12 @@ function ProductModal({ product, onClose }: { product: ProductRow | null; onClos
           </label>
           <div>
             <span className="text-sm text-ink-soft">Единица</span>
-            <div className="grid grid-cols-2 gap-1">
-              {(["PCS", "KG"] as const).map((u) => (
-                <button type="button" key={u} onClick={() => setUnit(u)}
-                  className={`h-11 rounded-tag border font-medium ${unit === u ? "bg-ink text-paper border-ink" : "bg-paper border-line"}`}>
-                  {u === "PCS" ? "шт" : "кг"}
-                </button>
-              ))}
-            </div>
+            <SegmentedControl
+              className="grid grid-cols-2 mt-0 [&>button]:w-full"
+              value={unit}
+              onChange={setUnit}
+              options={[{ value: "PCS", label: "шт" }, { value: "KG", label: "кг" }]}
+            />
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
@@ -307,7 +333,7 @@ function ProductModal({ product, onClose }: { product: ProductRow | null; onClos
               defaultValue={product?.barcode ?? ""}
               placeholder={unit === "KG" ? "сгенерируется" : "13 или 8 цифр"}
               onKeyDown={(e) => e.key === "Enter" && e.preventDefault()}
-              className="w-full h-11 px-3 bg-paper border border-line rounded-tag font-mono-nums focus:border-ink"
+              className="w-full h-11 px-3 bg-paper border border-line rounded-tag font-app-mono focus:border-ink"
             />
           </label>
           <label className="block">
@@ -323,7 +349,7 @@ function ProductModal({ product, onClose }: { product: ProductRow | null; onClos
             <span className="block text-xs text-ink-soft">Для товаров без штрихкода или тех, что неудобно сканировать (тяжёлая вода и т.п.).</span>
           </span>
         </label>
-        {error && <p className="text-stamp text-sm">{error}</p>}
+        {error && <p className="text-stamp-text text-sm">{error}</p>}
         <div className="grid grid-cols-2 gap-3 pt-2">
           <Button type="button" variant="line" size="lg" onClick={onClose}>Отмена</Button>
           <Button type="submit" variant="stamp" size="lg" disabled={pending}>{pending ? "Сохраняем…" : "Сохранить"}</Button>
@@ -357,14 +383,12 @@ function MoveModal({ product, onClose }: { product: ProductRow; onClose: () => v
           <h2 className="text-xl font-semibold">{product.name}</h2>
           <p className="text-ink-soft text-sm">Остаток сейчас: {qty(product.stock, product.unit)} {unitLabel(product.unit)}</p>
         </div>
-        <div className="grid grid-cols-3 gap-2">
-          {(["IN", "OUT", "WRITEOFF"] as const).map((t) => (
-            <button type="button" key={t} onClick={() => setType(t)}
-              className={`h-11 rounded-tag border text-sm font-medium ${type === t ? "bg-ink text-paper border-ink" : "bg-paper border-line"}`}>
-              {labels[t]}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          className="grid grid-cols-3 [&>button]:w-full"
+          value={type}
+          onChange={setType}
+          options={(["IN", "OUT", "WRITEOFF"] as const).map((t) => ({ value: t, label: labels[t] }))}
+        />
         <label className="block">
           <span className="text-sm text-ink-soft">Количество, {unitLabel(product.unit)}</span>
           <input
@@ -378,7 +402,7 @@ function MoveModal({ product, onClose }: { product: ProductRow; onClose: () => v
               const cleaned = el.value.replace(/[^\d.,]/g, "");
               if (cleaned !== el.value) el.value = cleaned;
             }}
-            className="w-full h-14 px-3 text-2xl font-mono-nums bg-paper border border-line rounded-tag focus:border-ink"
+            className="w-full h-14 px-3 text-2xl font-app-mono bg-paper border border-line rounded-tag focus:border-ink"
           />
         </label>
         <label className="block">
@@ -386,7 +410,7 @@ function MoveModal({ product, onClose }: { product: ProductRow; onClose: () => v
           <input name="reason" placeholder={type === "WRITEOFF" ? "истёк срок, брак…" : "поставка…"}
             className="w-full h-11 px-3 bg-paper border border-line rounded-tag focus:border-ink" />
         </label>
-        {error && <p className="text-stamp text-sm">{error}</p>}
+        {error && <p className="text-stamp-text text-sm">{error}</p>}
         <div className="grid grid-cols-2 gap-3">
           <Button type="button" variant="line" size="lg" onClick={onClose}>Отмена</Button>
           <Button type="submit" variant={type === "IN" ? "fresh" : "stamp"} size="lg" disabled={pending}>
@@ -406,7 +430,7 @@ function PrintModal({ product, onClose }: { product: ProductRow; onClose: () => 
         <p className="text-ink-soft text-sm mb-4">{product.name}</p>
         <div className="bg-white p-4 rounded-tag inline-block border border-line" id="label">
           <div className="text-black font-semibold text-sm mb-1">{product.name}</div>
-          <div className="text-black font-mono-nums font-bold text-lg mb-1">{money(product.price)}/{unitLabel(product.unit)}</div>
+          <div className="text-black font-app-mono font-bold text-lg mb-1">{money(product.price)}/{unitLabel(product.unit)}</div>
           <Barcode value={product.barcode!} />
         </div>
         <div className="grid grid-cols-2 gap-3 mt-5">

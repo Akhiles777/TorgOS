@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Button } from "@/components/ui";
+import { Button, Modal, ReadoutPanel, SegmentedControl } from "@/components/ui";
 import { money0 } from "@/lib/format";
 import type { PaymentMethod } from "./types";
 
@@ -61,20 +61,17 @@ export function PaymentModal({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-ink/40 grid place-items-center p-4"
-      onMouseDown={(e) => e.target === e.currentTarget && !busy && onCancel()}
-    >
-      <div className="bg-paper rounded-tag border border-line shadow-2xl p-6 w-[min(94vw,560px)] max-h-[94dvh] overflow-y-auto">
+    <Modal onCancel={() => !busy && onCancel()}>
+      <div className="w-[min(94vw,560px)] font-app-text">
         <div className="flex items-end justify-between mb-4">
           <span className="text-ink-soft uppercase tracking-wide text-sm">{isDebt ? "В долг" : "К оплате"}</span>
-          <span className="font-mono-nums font-bold text-5xl tabular-nums">{money0(total)}<span className="text-2xl"> ₽</span></span>
+          <span className="font-app-display font-bold text-5xl tabular-nums">{money0(total)}<span className="text-2xl"> ₽</span></span>
         </div>
 
         {/* Переключатель «в долг» */}
-        <label className="flex items-center gap-2.5 bg-paper-2 border border-line rounded-tag p-3 mb-4 cursor-pointer">
+        <label className="flex items-center gap-2.5 bg-paper-2 border border-line rounded-tag p-3 mb-4 cursor-pointer min-h-14">
           <input type="checkbox" checked={isDebt} onChange={(e) => setIsDebt(e.target.checked)} className="w-5 h-5 accent-stamp" />
-          <span className="text-sm font-medium">Записать в долг <span className="text-ink-soft font-normal">— деньги получите позже</span></span>
+          <span className="text-base font-medium">Записать в долг <span className="text-ink-soft font-normal">— деньги получите позже</span></span>
         </label>
 
         {isDebt ? (
@@ -102,24 +99,20 @@ export function PaymentModal({
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 gap-2 mb-5">
-              {(["CASH", "TRANSFER"] as PaymentMethod[]).map((m) => (
-                <button
-                  key={m}
-                  onClick={() => setMethod(m)}
-                  className={`h-14 rounded-tag border font-medium transition-colors ${
-                    method === m ? "bg-ink text-paper border-ink" : "bg-paper-2 border-line hover:border-ink"
-                  }`}
-                >
-                  {m === "CASH" ? "Наличные" : "Перевод"}
-                  <span className="block text-[11px] opacity-60 font-mono-nums">{m === "CASH" ? "F2" : "F3"}</span>
-                </button>
-              ))}
-            </div>
+            <SegmentedControl
+              size="cash"
+              className="grid grid-cols-2 mb-5 [&>button]:w-full"
+              value={method}
+              onChange={setMethod}
+              options={[
+                { value: "CASH", label: <>Наличные <span className="block text-[11px] opacity-60 font-app-mono">F2</span></> },
+                { value: "TRANSFER", label: <>Перевод <span className="block text-[11px] opacity-60 font-app-mono">F3</span></> },
+              ]}
+            />
 
             {method === "CASH" ? (
               <div>
-                <label className="block text-sm text-ink-soft mb-1">Получено <span className="opacity-60">(необязательно — если под расчёт)</span></label>
+                <label className="block text-base text-ink-soft mb-1">Получено <span className="opacity-60">(необязательно — если под расчёт)</span></label>
                 <input
                   ref={cashRef}
                   inputMode="decimal"
@@ -127,9 +120,9 @@ export function PaymentModal({
                   onChange={(e) => setCash(e.target.value.replace(/[^\d.,]/g, ""))}
                   onKeyDown={(e) => e.key === "Enter" && pay()}
                   placeholder="0"
-                  className="w-full h-16 px-4 text-4xl font-mono-nums tabular-nums text-center bg-paper border-2 border-line rounded-tag focus:border-ink"
+                  className="w-full h-16 px-4 text-4xl font-app-mono tabular-nums text-center bg-paper border-2 border-line rounded-tag focus:border-ink"
                 />
-                <p className="text-xs text-ink-soft mt-3 mb-1.5">Какой купюрой рассчитаться — сдача сразу видна:</p>
+                <p className="text-sm text-ink-soft mt-3 mb-1.5">Какой купюрой рассчитаться — сдача сразу видна:</p>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {quick.map((q) => {
                     const isExact = Math.abs(q - total) < 0.005;
@@ -138,12 +131,12 @@ export function PaymentModal({
                       <button
                         key={q}
                         onClick={() => setCash(String(q))}
-                        className={`min-h-[52px] px-3 py-1.5 rounded-tag border text-left transition-colors ${
+                        className={`min-h-14 px-3 py-1.5 rounded-tag border text-left transition-colors ${
                           active ? "border-ink bg-ink text-paper" : "border-line bg-paper-2 hover:border-ink"
                         }`}
                       >
-                        <span className="block font-mono-nums font-semibold tabular-nums">{money0(q)} ₽</span>
-                        <span className={`block text-xs font-mono-nums tabular-nums ${active ? "text-paper/70" : "text-ink-soft"}`}>
+                        <span className="block font-app-mono font-semibold tabular-nums">{money0(q)} ₽</span>
+                        <span className={`block text-xs font-app-mono tabular-nums ${active ? "text-paper/70" : "text-ink-soft"}`}>
                           {isExact ? "без сдачи" : `сдача ${money0(q - total)} ₽`}
                         </span>
                       </button>
@@ -151,19 +144,15 @@ export function PaymentModal({
                   })}
                 </div>
 
-                <div
-                  className={`mt-5 rounded-tag px-5 py-4 border-2 flex items-end justify-between transition-colors ${
-                    enough ? "border-fresh bg-fresh/10" : tooLittle ? "border-stamp bg-stamp/10" : "border-line bg-paper-2"
-                  }`}
-                >
-                  <span className="text-ink-soft uppercase tracking-wide">{tooLittle ? "Не хватает" : "Сдача"}</span>
-                  <span className={`font-mono-nums font-bold text-5xl tabular-nums ${enough ? "text-fresh" : tooLittle ? "text-stamp" : "text-ink-soft/50"}`}>
-                    {enough ? money0(change) : tooLittle ? money0(total - given) : "—"}<span className="text-2xl"> ₽</span>
-                  </span>
-                </div>
+                <ReadoutPanel
+                  className="mt-5"
+                  label={tooLittle ? "Не хватает" : "Сдача"}
+                  value={enough ? money0(change) : tooLittle ? money0(total - given) : "—"}
+                  tone={enough ? "fresh" : tooLittle ? "stamp" : "paper"}
+                />
               </div>
             ) : (
-              <p className="text-ink-soft py-6 text-center">Дождитесь перевода и подтвердите.</p>
+              <p className="text-ink-soft py-6 text-center text-base">Дождитесь перевода и подтвердите.</p>
             )}
           </>
         )}
@@ -177,6 +166,6 @@ export function PaymentModal({
           </Button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

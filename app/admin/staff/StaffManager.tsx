@@ -29,9 +29,9 @@ export function StaffManager({ staff }: { staff: { id: string; name: string; log
           </thead>
           <tbody>
             {staff.map((s) => (
-              <tr key={s.id} className="border-t border-line">
+              <tr key={s.id} className="border-t border-line hover:bg-paper-2/50">
                 <td className="px-3 py-2 font-medium">{s.name}</td>
-                <td className="px-3 py-2 font-mono-nums text-ink-soft">{s.login}</td>
+                <td className="px-3 py-2 font-app-mono text-ink-soft">{s.login}</td>
                 <td className="px-3 py-2">
                   <Badge tone={s.role === "OWNER" ? "stamp" : s.role === "ADMIN" ? "warn" : "fresh"}>{ROLE_LABEL[s.role]}</Badge>
                 </td>
@@ -47,7 +47,7 @@ export function StaffManager({ staff }: { staff: { id: string; name: string; log
           <div key={s.id} className="border border-line rounded-tag bg-paper-2 p-3 flex items-center justify-between gap-2">
             <div className="min-w-0">
               <div className="font-medium leading-tight">{s.name}</div>
-              <div className="font-mono-nums text-xs text-ink-soft mt-0.5">{s.login}</div>
+              <div className="font-app-mono text-xs text-ink-soft mt-0.5">{s.login}</div>
             </div>
             <Badge tone={s.role === "OWNER" ? "stamp" : s.role === "ADMIN" ? "warn" : "fresh"}>{ROLE_LABEL[s.role]}</Badge>
           </div>
@@ -85,13 +85,13 @@ function AddStaffModal({ onClose }: { onClose: () => void }) {
         </label>
         <label className="block">
           <span className="text-sm text-ink-soft">Логин</span>
-          <input name="login" required autoComplete="off" className="w-full h-11 px-3 bg-paper border border-line rounded-tag font-mono-nums focus:border-ink" />
+          <input name="login" required autoComplete="off" className="w-full h-11 px-3 bg-paper border border-line rounded-tag font-app-mono focus:border-ink" />
         </label>
         <label className="block">
           <span className="text-sm text-ink-soft">Пароль</span>
           <input name="password" required minLength={6} autoComplete="new-password" className="w-full h-11 px-3 bg-paper border border-line rounded-tag focus:border-ink" />
         </label>
-        {error && <p className="text-stamp text-sm">{error}</p>}
+        {error && <p className="text-stamp-text text-sm">{error}</p>}
         <div className="grid grid-cols-2 gap-3 pt-1">
           <Button type="button" variant="line" size="lg" onClick={onClose}>Отмена</Button>
           <Button type="submit" variant="stamp" size="lg" disabled={pending}>{pending ? "…" : "Добавить"}</Button>

@@ -2,7 +2,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui";
+import { Button, SegmentedControl } from "@/components/ui";
 import { money0, qty, unitLabel } from "@/lib/format";
 import { parseIntakeAction, applyIntakeAction, type ApplyResult } from "./actions";
 import type { IntakeItem } from "@/server/ai/product-intake";
@@ -68,7 +68,7 @@ export function AssistantChat({ userName }: { userName: string }) {
         </div>
       </div>
 
-      {error && <p className="text-stamp text-sm mb-4">{error}</p>}
+      {error && <p className="text-stamp-text text-sm mb-4">{error}</p>}
 
       {/* Проверка перед сохранением */}
       {items && items.length > 0 && (
@@ -76,17 +76,17 @@ export function AssistantChat({ userName }: { userName: string }) {
           <h2 className="font-semibold mb-2">Проверьте перед сохранением ({items.length})</h2>
           <div className="space-y-2">
             {items.map((it, i) => (
-              <div key={i} className="border border-line rounded-tag bg-paper p-3">
+              <div key={i} className="border border-line rounded-tag bg-paper-2 p-3">
                 <div className="flex items-center gap-2 mb-2">
                   <input
                     value={it.name}
                     onChange={(e) => patch(i, { name: e.target.value })}
                     className="flex-1 h-9 px-2 bg-paper border border-line rounded-tag font-medium focus:border-ink"
                   />
-                  <button onClick={() => removeItem(i)} className="text-xs text-ink-soft hover:text-stamp px-2">убрать</button>
+                  <button onClick={() => removeItem(i)} className="text-xs text-ink-soft hover:text-stamp-text px-2">убрать</button>
                 </div>
                 {it.matchedProductId ? (
-                  <p className="text-xs text-fresh mb-2">приход к существующему товару</p>
+                  <p className="text-xs text-fresh-text mb-2">приход к существующему товару</p>
                 ) : (
                   <p className="text-xs text-ink-soft mb-2">новый товар · категория «{it.category}»</p>
                 )}
@@ -94,13 +94,16 @@ export function AssistantChat({ userName }: { userName: string }) {
                   <NumBox label={`Кол-во, ${unitLabel(it.unit)}`} value={it.quantity} onChange={(v) => patch(i, { quantity: v })} />
                   <div>
                     <span className="block text-xs text-ink-soft mb-0.5">Единица</span>
-                    <div className="grid grid-cols-2 gap-1">
-                      {(["PCS", "KG"] as const).map((u) => (
-                        <button key={u} onClick={() => patch(i, { unit: u })} disabled={!!it.matchedProductId}
-                          className={`h-9 rounded-tag border text-sm ${it.unit === u ? "bg-ink text-paper border-ink" : "bg-paper border-line"} disabled:opacity-50`}>
-                          {u === "PCS" ? "шт" : "кг"}
-                        </button>
-                      ))}
+                    <div className={it.matchedProductId ? "pointer-events-none opacity-50" : ""}>
+                      <SegmentedControl
+                        className="grid grid-cols-2 [&>button]:w-full [&>button]:h-9 [&>button]:text-sm"
+                        value={it.unit}
+                        onChange={(u) => patch(i, { unit: u })}
+                        options={[
+                          { value: "PCS" as const, label: "шт" },
+                          { value: "KG" as const, label: "кг" },
+                        ]}
+                      />
                     </div>
                   </div>
                   <NumBox label="Цена, ₽" value={it.price} onChange={(v) => patch(i, { price: v })} />
@@ -121,21 +124,21 @@ export function AssistantChat({ userName }: { userName: string }) {
       {/* Результат с ссылками на проверку */}
       {done && done.length > 0 && (
         <div className="border-2 border-fresh bg-fresh/10 rounded-tag p-4">
-          <h2 className="font-semibold text-fresh mb-1">✓ Оприходовано ({done.length})</h2>
+          <h2 className="font-semibold text-fresh-text mb-1">✓ Оприходовано ({done.length})</h2>
           <p className="text-sm text-ink-soft mb-3">На всех экранах точки появилась рекомендация обновить страницу.</p>
           <ul className="space-y-1.5">
             {done.map((r) => (
               <li key={r.productId} className="flex items-baseline gap-2 text-sm">
-                <span className="text-fresh">{r.action === "created" ? "новый" : "приход"}</span>
-                <Link href={`/admin?q=${encodeURIComponent(r.name)}`} className="font-medium underline underline-offset-2 hover:text-stamp">
+                <span className="text-fresh-text">{r.action === "created" ? "новый" : "приход"}</span>
+                <Link href={`/admin?q=${encodeURIComponent(r.name)}`} className="font-medium underline underline-offset-2 hover:text-stamp-text">
                   {r.name}
                 </Link>
-                <span className="text-ink-soft font-mono-nums">+{qty(r.quantity, r.unit)} {unitLabel(r.unit)}</span>
+                <span className="text-ink-soft font-app-mono">+{qty(r.quantity, r.unit)} {unitLabel(r.unit)}</span>
               </li>
             ))}
           </ul>
           <div className="mt-3">
-            <Link href="/admin" className="text-sm text-stamp underline underline-offset-2">Открыть товары для проверки →</Link>
+            <Link href="/admin" className="text-sm text-stamp-text underline underline-offset-2">Открыть товары для проверки →</Link>
           </div>
         </div>
       )}
@@ -154,7 +157,7 @@ function NumBox({ label, value, onChange }: { label: string; value: number; onCh
           const n = parseFloat(e.target.value.replace(",", ".").replace(/[^\d.]/g, ""));
           onChange(Number.isFinite(n) ? n : 0);
         }}
-        className="w-full h-9 px-2 bg-paper border border-line rounded-tag font-mono-nums text-sm focus:border-ink"
+        className="w-full h-9 px-2 bg-paper border border-line rounded-tag font-app-mono text-sm focus:border-ink"
       />
     </label>
   );

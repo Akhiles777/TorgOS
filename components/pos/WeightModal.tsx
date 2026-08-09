@@ -29,11 +29,11 @@ export function WeightModal({
 
   return (
     <Overlay onCancel={onCancel}>
-      <div className="w-[min(92vw,420px)]">
-        <p className="text-ink-soft text-sm">Развесной товар</p>
+      <div className="w-[min(92vw,420px)] font-app-text">
+        <p className="text-ink-soft text-base">Развесной товар</p>
         <h2 className="text-2xl font-semibold mt-1 mb-4">{product.name}</h2>
 
-        <label className="block text-sm text-ink-soft mb-1">Вес, кг</label>
+        <label className="block text-base text-ink-soft mb-1">Вес, кг</label>
         <input
           ref={ref}
           inputMode="decimal"
@@ -44,12 +44,12 @@ export function WeightModal({
             if (e.key === "Escape") onCancel();
           }}
           placeholder="0,000"
-          className="w-full h-16 px-4 text-4xl font-mono-nums tabular-nums text-center bg-paper border-2 border-line rounded-tag focus:border-ink"
+          className="w-full h-16 px-4 text-4xl font-app-mono tabular-nums text-center bg-paper border-2 border-line rounded-tag focus:border-ink"
         />
 
         <div className="mt-4 flex items-end justify-between bg-paper-2 rounded-tag px-4 py-3 border border-line">
-          <span className="text-ink-soft">{money0(product.price)} ₽/кг</span>
-          <span className="font-mono-nums font-bold text-3xl tabular-nums">{money0(sum)} ₽</span>
+          <span className="text-ink-soft text-sm">{money0(product.price)} ₽/кг</span>
+          <span className="font-app-mono font-bold text-3xl tabular-nums">{money0(sum)} ₽</span>
         </div>
 
         <div className="grid grid-cols-2 gap-3 mt-5">

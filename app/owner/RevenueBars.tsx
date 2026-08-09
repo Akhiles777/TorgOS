@@ -14,7 +14,7 @@ export function RevenueBars({ data }: { data: { date: string; revenue: number }[
     <div>
       <div className="flex items-baseline justify-between mb-2">
         <span className="text-sm text-ink-soft">{dateShort(cur.date)}</span>
-        <span className="font-mono-nums font-semibold tabular-nums text-lg">{money0(cur.revenue)} ₽</span>
+        <span className="font-app-mono font-semibold tabular-nums text-lg">{money0(cur.revenue)} ₽</span>
       </div>
       <div className="flex items-end gap-1 h-28" role="img" aria-label="Выручка по дням">
         {data.map((d, i) => (
@@ -33,7 +33,7 @@ export function RevenueBars({ data }: { data: { date: string; revenue: number }[
           </button>
         ))}
       </div>
-      <div className="flex justify-between mt-1 text-[10px] text-ink-soft font-mono-nums">
+      <div className="flex justify-between mt-1 text-[10px] text-ink-soft font-app-mono">
         <span>{dateShort(data[0].date)}</span>
         <span>{dateShort(data[data.length - 1].date)}</span>
       </div>
