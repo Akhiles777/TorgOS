@@ -17,6 +17,7 @@ import { Modal, ReadoutPanel } from "@/components/ui";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
 import { money0 } from "@/lib/format";
 import { logoutAction } from "@/app/logout/action";
+import { endImpersonationAction } from "@/app/impersonate/actions";
 import { startShiftAction } from "@/app/pos/actions";
 import { RestockBanner } from "@/components/RestockBanner";
 import type { StockUpdate } from "@/server/realtime";
@@ -39,11 +40,13 @@ export function PosScreen({
   accountName,
   employees,
   currentShift,
+  impersonating,
 }: {
   initialProducts: PosProduct[];
   accountName: string;
   employees: ShiftEmployee[];
   currentShift: ShiftEmployee | null;
+  impersonating?: boolean;
 }) {
   const [products] = useState(initialProducts);
   const [stock, setStock] = useState<Record<string, number>>(() =>
@@ -255,6 +258,16 @@ export function PosScreen({
 
   return (
     <div className="flex flex-col lg:flex-row h-[100dvh] overflow-hidden font-app-text text-lg">
+      {impersonating && (
+        <div className="fixed top-0 inset-x-0 z-40 bg-warn text-ink px-3 py-1.5 text-xs flex items-center justify-between gap-2">
+          <span>Вход как {accountName} через root</span>
+          <form action={endImpersonationAction}>
+            <button type="submit" className="h-6 px-2 rounded-tag bg-ink text-paper text-xs font-medium">
+              Вернуться
+            </button>
+          </form>
+        </div>
+      )}
       <RestockBanner />
       {/* Скрытый инпут сканера — всегда в фокусе в режиме idle */}
       <input

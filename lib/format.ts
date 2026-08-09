@@ -48,6 +48,14 @@ export function dateShort(d: Date | string): string {
   return dt.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" });
 }
 
+// «17 июля 2026» — для мест, где дату читает человек, а не сверяет глазами
+// таблицу (лендинг, письма, /billing/expired). В плотных списках/таблицах
+// (например /root) короткая числовая dateShort — то, что нужно там, не эта.
+export function dateLong(d: Date | string): string {
+  const dt = typeof d === "string" ? new Date(d) : d;
+  return dt.toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" });
+}
+
 export function timeShort(d: Date | string): string {
   const dt = typeof d === "string" ? new Date(d) : d;
   return dt.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });

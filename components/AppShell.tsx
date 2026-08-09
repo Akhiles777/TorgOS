@@ -7,6 +7,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import type { Role } from "@prisma/client";
 import { logoutAction } from "@/app/logout/action";
+import { endImpersonationAction } from "@/app/impersonate/actions";
 import { RestockBanner } from "@/components/RestockBanner";
 import { EmailVerifyBanner } from "@/components/EmailVerifyBanner";
 
@@ -18,6 +19,7 @@ export function AppShell({
   children,
   email,
   emailVerifiedAt,
+  impersonating,
 }: {
   role: Role;
   userName: string;
@@ -25,6 +27,7 @@ export function AppShell({
   children: ReactNode;
   email?: string | null;
   emailVerifiedAt?: Date | null;
+  impersonating?: boolean;
 }) {
   const links: { href: string; label: string; show: boolean }[] = [
     { href: "/owner", label: "Кабинет", show: role === "OWNER" },
@@ -34,6 +37,16 @@ export function AppShell({
 
   return (
     <div className="min-h-[100dvh] flex flex-col font-app-text">
+      {impersonating && (
+        <div className="bg-warn text-ink px-3 sm:px-4 py-2 text-sm flex items-center justify-between gap-3">
+          <span>Вы вошли как <strong>{userName}</strong> через супер-админку — действия видны в аудит-логе.</span>
+          <form action={endImpersonationAction} className="shrink-0">
+            <button type="submit" className="h-8 px-3 rounded-tag bg-ink text-paper text-xs font-medium hover:brightness-110">
+              Вернуться в root
+            </button>
+          </form>
+        </div>
+      )}
       {email && !emailVerifiedAt && <EmailVerifyBanner email={email} />}
       <RestockBanner />
       <header className="sticky top-0 z-30 bg-paper/95 backdrop-blur border-b border-line">

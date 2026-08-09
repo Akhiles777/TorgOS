@@ -9,7 +9,8 @@
     "lint": "eslint",
     "test": "vitest run",
     "db:seed": "prisma db seed",
-    "db:logins": "tsx prisma/ensure-logins.ts"
+    "db:logins": "tsx prisma/ensure-logins.ts",
+    "create-superadmin": "tsx prisma/create-superadmin.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

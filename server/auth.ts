@@ -27,6 +27,9 @@ export type SessionUser = {
   storeId: string | null;
   email: string | null;
   emailVerifiedAt: Date | null;
+  // Эта сессия создана супер-админом через «войти как» (server/services/rootAdmin.ts),
+  // не обычным логином — AppShell показывает баннер с кнопкой возврата.
+  impersonating: boolean;
 };
 
 export async function createSession(userId: string): Promise<string> {
@@ -53,7 +56,10 @@ async function resolveToken(token: string): Promise<SessionUser | null> {
     await prisma.session.update({ where: { id }, data: { expiresAt: new Date(Date.now() + TTL_MS) } });
   }
   const u = session.user;
-  return { id: u.id, name: u.name, login: u.login, role: u.role, organizationId: u.organizationId, storeId: u.storeId, email: u.email, emailVerifiedAt: u.emailVerifiedAt };
+  return {
+    id: u.id, name: u.name, login: u.login, role: u.role, organizationId: u.organizationId, storeId: u.storeId,
+    email: u.email, emailVerifiedAt: u.emailVerifiedAt, impersonating: !!session.impersonatedBySuperAdminId,
+  };
 }
 
 // Текущий пользователь или null. Кэшируется в рамках запроса вызывающим при желании.
@@ -62,6 +68,14 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
   const token = jar.get(COOKIE)?.value;
   if (!token) return null;
   return resolveToken(token);
+}
+
+// Сырой токен сессии — нужен там, где логика завязана на саму сессию, а не
+// на пользователя (сейчас единственный случай: завершение impersonation,
+// server/services/rootAdmin.ts::endImpersonation принимает токен, не userId).
+export async function getRawSessionToken(): Promise<string | null> {
+  const jar = await cookies();
+  return jar.get(COOKIE)?.value ?? null;
 }
 
 export async function login(loginName: string, password: string): Promise<SessionUser | null> {
@@ -73,7 +87,10 @@ export async function login(loginName: string, password: string): Promise<Sessio
   if (!(await compare(password, user.passwordHash))) return null;
   const token = await createSession(user.id);
   await setSessionCookie(token);
-  return { id: user.id, name: user.name, login: user.login, role: user.role, organizationId: user.organizationId, storeId: user.storeId, email: user.email, emailVerifiedAt: user.emailVerifiedAt };
+  return {
+    id: user.id, name: user.name, login: user.login, role: user.role, organizationId: user.organizationId, storeId: user.storeId,
+    email: user.email, emailVerifiedAt: user.emailVerifiedAt, impersonating: false,
+  };
 }
 
 export async function setSessionCookie(token: string) {

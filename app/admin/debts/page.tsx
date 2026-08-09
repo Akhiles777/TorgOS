@@ -12,7 +12,7 @@ export default async function DebtsPage() {
   const { rows, openTotal, openCount } = await listDebts(db, storeId, true);
 
   return (
-    <AppShell role={user.role} userName={user.name} active="admin" email={user.email} emailVerifiedAt={user.emailVerifiedAt}>
+    <AppShell role={user.role} userName={user.name} active="admin" email={user.email} emailVerifiedAt={user.emailVerifiedAt} impersonating={user.impersonating}>
       <AdminTabs />
       <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 mb-4">
         <h1 className="text-xl font-semibold">Долги</h1>

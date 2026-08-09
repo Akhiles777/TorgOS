@@ -1,8 +1,9 @@
 "use client";
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Button, DecimalField, SegmentedControl, EmptyState, ConfirmDialog } from "@/components/ui";
+import { Button, DecimalField, SegmentedControl, EmptyState, ConfirmDialog, Modal } from "@/components/ui";
 import { Barcode } from "@/components/Barcode";
+import { BarcodeScanner } from "@/components/BarcodeScanner";
 import { money, money0, qty, unitLabel, parseRuNumber } from "@/lib/format";
 import type { ProductRow, ProductFilter } from "@/server/services/products";
 import { saveProductAction, moveStockAction, deleteProductAction, toggleActiveAction } from "./actions";
@@ -15,11 +16,28 @@ const FILTER_LABELS: Record<ProductFilter, string> = {
 export function ProductsManager({ products, filter, query }: { products: ProductRow[]; filter: ProductFilter; query: string }) {
   const router = useRouter();
   const [editing, setEditing] = useState<ProductRow | "new" | null>(null);
+  const [newBarcode, setNewBarcode] = useState<string | undefined>(undefined);
   const [moving, setMoving] = useState<ProductRow | null>(null);
   const [printing, setPrinting] = useState<ProductRow | null>(null);
   const [q, setQ] = useState(query);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [, startAction] = useTransition();
+
+  // Скан в шапке — совмещает «быстрый просмотр» и «приход по сканеру» в одном
+  // месте: одна и та же кнопка, дальше решение принимается по результату.
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scanResult, setScanResult] = useState<{ code: string; product: ProductRow | null; loading: boolean } | null>(null);
+
+  const handleScanCode = async (code: string) => {
+    setScanResult({ code, product: null, loading: true });
+    try {
+      const res = await fetch(`/api/admin/lookup?barcode=${encodeURIComponent(code)}`);
+      const data = await res.json();
+      setScanResult({ code, product: data.product ?? null, loading: false });
+    } catch {
+      setScanResult({ code, product: null, loading: false });
+    }
+  };
 
   // Удаление из базы. Если товар уже в чеках — сервис откажет, и мы предлагаем
   // снять с продажи: история продаж важнее, чем чистота справочника. Два шага —
@@ -91,6 +109,7 @@ export function ProductsManager({ products, filter, query }: { products: Product
             className="h-10 px-3 bg-paper border border-line rounded-tag w-full sm:w-52 focus:border-ink"
           />
         </form>
+        <Button variant="line" onClick={() => setScannerOpen(true)}>Скан</Button>
         <Button variant="stamp" onClick={() => setEditing("new")}>+ Товар</Button>
       </div>
 
@@ -192,9 +211,116 @@ export function ProductsManager({ products, filter, query }: { products: Product
         </>
       )}
 
-      {editing && <ProductModal product={editing === "new" ? null : editing} onClose={() => setEditing(null)} />}
+      {editing && (
+        <ProductModal
+          product={editing === "new" ? null : editing}
+          initialBarcode={editing === "new" ? newBarcode : undefined}
+          onClose={() => { setEditing(null); setNewBarcode(undefined); }}
+        />
+      )}
       {moving && <MoveModal product={moving} onClose={() => setMoving(null)} />}
       {printing && printing.barcode && <PrintModal product={printing} onClose={() => setPrinting(null)} />}
+
+      {scannerOpen && (
+        <BarcodeScanner
+          onScan={(code) => {
+            setScannerOpen(false);
+            handleScanCode(code);
+          }}
+          onClose={() => setScannerOpen(false)}
+        />
+      )}
+
+      {scanResult && (
+        <Modal onCancel={() => setScanResult(null)}>
+          <div className="w-[min(92vw,420px)]">
+            <p className="text-ink-soft text-sm font-app-mono">{scanResult.code}</p>
+            {scanResult.loading ? (
+              <p className="mt-3">Ищу…</p>
+            ) : scanResult.product ? (
+              <>
+                <h2 className="text-xl font-semibold mt-1 mb-3">{scanResult.product.name}</h2>
+                {!scanResult.product.isActive && (
+                  <p className="text-warn-text text-sm mb-3">Товар снят с продажи.</p>
+                )}
+                <div className="flex items-baseline py-2 border-t border-b border-dashed border-line">
+                  <span>Остаток</span>
+                  <span className="leader" aria-hidden />
+                  <span className="font-app-mono font-semibold">
+                    {qty(scanResult.product.stock, scanResult.product.unit)} {unitLabel(scanResult.product.unit)}
+                  </span>
+                </div>
+                <div className="flex items-baseline py-2 border-b border-dashed border-line">
+                  <span>Цена</span>
+                  <span className="leader" aria-hidden />
+                  <span className="font-app-mono font-semibold">{money0(scanResult.product.price)} ₽</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3 mt-5">
+                  <Button
+                    variant="line"
+                    size="lg"
+                    onClick={() => {
+                      if (!scanResult.product) return;
+                      setEditing(scanResult.product);
+                      setScanResult(null);
+                    }}
+                  >
+                    Редактировать
+                  </Button>
+                  <Button
+                    variant="fresh"
+                    size="lg"
+                    onClick={() => {
+                      if (!scanResult.product) return;
+                      setMoving(scanResult.product);
+                      setScanResult(null);
+                    }}
+                  >
+                    Приход
+                  </Button>
+                </div>
+                {!scanResult.product.isActive && (
+                  <Button
+                    variant="line"
+                    size="lg"
+                    className="w-full mt-2"
+                    onClick={() => {
+                      if (!scanResult.product) return;
+                      restore(scanResult.product);
+                      setScanResult(null);
+                    }}
+                  >
+                    Вернуть в продажу
+                  </Button>
+                )}
+                <Button variant="ghost" size="lg" className="w-full mt-2" onClick={() => { setScanResult(null); setScannerOpen(true); }}>
+                  Сканировать ещё
+                </Button>
+              </>
+            ) : (
+              <>
+                <p className="mt-3">Товар с этим штрихкодом не найден.</p>
+                <div className="grid grid-cols-2 gap-3 mt-5">
+                  <Button variant="line" size="lg" onClick={() => { setScanResult(null); setScannerOpen(true); }}>
+                    Сканировать ещё
+                  </Button>
+                  <Button
+                    variant="stamp"
+                    size="lg"
+                    onClick={() => {
+                      setNewBarcode(scanResult.code);
+                      setEditing("new");
+                      setScanResult(null);
+                    }}
+                  >
+                    Добавить товар
+                  </Button>
+                </div>
+              </>
+            )}
+          </div>
+        </Modal>
+      )}
 
       <ConfirmDialog
         open={!!deleteTarget}
@@ -245,7 +371,7 @@ function defaultCostPrice(price: number): string {
   return String(cost);
 }
 
-function ProductModal({ product, onClose }: { product: ProductRow | null; onClose: () => void }) {
+function ProductModal({ product, initialBarcode, onClose }: { product: ProductRow | null; initialBarcode?: string; onClose: () => void }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -256,6 +382,8 @@ function ProductModal({ product, onClose }: { product: ProductRow | null; onClos
   const [price, setPrice] = useState(product?.price != null ? String(product.price) : "");
   const [costPrice, setCostPrice] = useState(product?.costPrice != null ? String(product.costPrice) : "");
   const [costTouched, setCostTouched] = useState(!!product);
+  const barcodeRef = useRef<HTMLInputElement>(null);
+  const [scanningBarcode, setScanningBarcode] = useState(false);
 
   const onSubmit = (fd: FormData) => {
     fd.set("unit", unit);
@@ -291,7 +419,8 @@ function ProductModal({ product, onClose }: { product: ProductRow | null; onClos
           <div>
             <span className="text-sm text-ink-soft">Единица</span>
             <SegmentedControl
-              className="grid grid-cols-2 mt-0 [&>button]:w-full"
+              fill
+              className="mt-0 w-full"
               value={unit}
               onChange={setUnit}
               options={[{ value: "PCS", label: "шт" }, { value: "KG", label: "кг" }]}
@@ -328,13 +457,25 @@ function ProductModal({ product, onClose }: { product: ProductRow | null; onClos
         <div className="grid grid-cols-2 gap-3">
           <label className="block">
             <span className="text-sm text-ink-soft">Штрихкод (EAN-13 или EAN-8)</span>
-            <input
-              name="barcode"
-              defaultValue={product?.barcode ?? ""}
-              placeholder={unit === "KG" ? "сгенерируется" : "13 или 8 цифр"}
-              onKeyDown={(e) => e.key === "Enter" && e.preventDefault()}
-              className="w-full h-11 px-3 bg-paper border border-line rounded-tag font-app-mono focus:border-ink"
-            />
+            <div className="relative">
+              <input
+                ref={barcodeRef}
+                name="barcode"
+                defaultValue={product?.barcode ?? initialBarcode ?? ""}
+                placeholder={unit === "KG" ? "сгенерируется" : "13 или 8 цифр"}
+                onKeyDown={(e) => e.key === "Enter" && e.preventDefault()}
+                className="w-full h-11 pl-3 pr-11 bg-paper border border-line rounded-tag font-app-mono focus:border-ink"
+              />
+              <button
+                type="button"
+                onClick={() => setScanningBarcode(true)}
+                className="absolute right-1 top-1/2 -translate-y-1/2 w-9 h-9 grid place-items-center rounded-tag text-ink-soft hover:text-ink hover:bg-paper-2"
+                aria-label="Сканировать штрихкод камерой"
+                title="Сканировать камерой"
+              >
+                <CameraIcon />
+              </button>
+            </div>
           </label>
           <label className="block">
             <span className="text-sm text-ink-soft">Срок годности</span>
@@ -355,7 +496,26 @@ function ProductModal({ product, onClose }: { product: ProductRow | null; onClos
           <Button type="submit" variant="stamp" size="lg" disabled={pending}>{pending ? "Сохраняем…" : "Сохранить"}</Button>
         </div>
       </form>
+      {scanningBarcode && (
+        <BarcodeScanner
+          onScan={(code) => {
+            if (barcodeRef.current) barcodeRef.current.value = code;
+            setScanningBarcode(false);
+          }}
+          onClose={() => setScanningBarcode(false)}
+        />
+      )}
     </Overlay>
+  );
+}
+
+// Простая монохромная иконка камеры — своя, без иконочных наборов.
+function CameraIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z" />
+      <circle cx="12" cy="13.5" r="3.2" />
+    </svg>
   );
 }
 
@@ -384,7 +544,7 @@ function MoveModal({ product, onClose }: { product: ProductRow; onClose: () => v
           <p className="text-ink-soft text-sm">Остаток сейчас: {qty(product.stock, product.unit)} {unitLabel(product.unit)}</p>
         </div>
         <SegmentedControl
-          className="grid grid-cols-3 [&>button]:w-full"
+          fill
           value={type}
           onChange={setType}
           options={(["IN", "OUT", "WRITEOFF"] as const).map((t) => ({ value: t, label: labels[t] }))}

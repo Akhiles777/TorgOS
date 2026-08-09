@@ -14,7 +14,7 @@ export function RegisterForm() {
         <Field label="Название" name="orgName" autoFocus placeholder="Гастроном" required />
         <input type="hidden" name="orgType" value={type} />
         <SegmentedControl
-          className="grid grid-cols-2 [&>button]:w-full"
+          fill
           value={type}
           onChange={setType}
           options={[
@@ -45,7 +45,7 @@ export function RegisterForm() {
         <span className="text-sm">
           Заполнить демо-товарами
           <span className="block text-xs text-ink-soft">
-            ~18 товаров для пробы кассы — чай, сыры, овощи, напитки. Без выдуманных продаж, можно удалить в любой момент.
+            ~20 товаров для пробы кассы — чай, сыры, овощи, курзе, лаваш, напитки. Без выдуманных продаж, можно удалить в любой момент.
           </span>
         </span>
       </label>

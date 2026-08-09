@@ -12,7 +12,7 @@ export default async function StaffPage() {
   const { user, db, storeId } = await requireStoreScope("ADMIN", "OWNER");
   const [staff, employees] = await Promise.all([listStaff(db, storeId), listEmployees(db, storeId)]);
   return (
-    <AppShell role={user.role} userName={user.name} active="admin" email={user.email} emailVerifiedAt={user.emailVerifiedAt}>
+    <AppShell role={user.role} userName={user.name} active="admin" email={user.email} emailVerifiedAt={user.emailVerifiedAt} impersonating={user.impersonating}>
       <AdminTabs />
       <EmployeesManager employees={employees} />
       <div className="h-8" />

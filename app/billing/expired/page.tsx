@@ -4,6 +4,7 @@ import { homeFor } from "@/server/guard";
 import { tenantDb } from "@/server/tenant";
 import { logoutAction } from "@/app/logout/action";
 import { Button } from "@/components/ui";
+import { dateLong } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -27,9 +28,7 @@ export default async function BillingExpiredPage() {
   // Если подписку уже продлили (или что-то поправили руками) — не держим на этом экране.
   if (!stillBlocked) redirect(homeFor(user.role));
 
-  const trialEndsAt = org?.trialEndsAt
-    ? org.trialEndsAt.toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" })
-    : null;
+  const trialEndsAt = org?.trialEndsAt ? dateLong(org.trialEndsAt) : null;
 
   return (
     <div className="min-h-[100dvh] grid place-items-center p-4 font-app-text">
@@ -41,7 +40,7 @@ export default async function BillingExpiredPage() {
             <div className="bg-paper-2 border border-line rounded-tag p-6 mt-5 receipt-torn text-left">
               <h1 className="text-xl font-semibold mb-1">Доступ приостановлен</h1>
               <p className="text-ink-soft text-sm mb-4">
-                {trialEndsAt ? `Бесплatный период «${org?.name}» закончился ${trialEndsAt}.` : `Подписка «${org?.name}» неактивна.`}
+                {trialEndsAt ? `Бесплатный период «${org?.name}» закончился ${trialEndsAt}.` : `Подписка «${org?.name}» неактивна.`}
                 {" "}Данные никуда не делись — как только продлите, всё будет на месте.
               </p>
               <div className="flex items-baseline py-2 border-t border-b border-dashed border-line">

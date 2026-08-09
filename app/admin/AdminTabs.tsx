@@ -7,6 +7,7 @@ export function AdminTabs() {
   const tabs = [
     { href: "/admin", label: "Товары" },
     { href: "/admin/assistant", label: "Приёмка ИИ" },
+    { href: "/admin/inventory", label: "Инвентаризация" },
     { href: "/admin/receipts", label: "Чеки за день" },
     { href: "/admin/debts", label: "Долги" },
     { href: "/admin/staff", label: "Сотрудники" },

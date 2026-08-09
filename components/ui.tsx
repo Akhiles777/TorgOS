@@ -204,24 +204,30 @@ export function SegmentedControl<T extends string>({
   value,
   onChange,
   size = "md",
+  fill = false,
   className = "",
 }: {
   options: { value: T; label: ReactNode }[];
   value: T;
   onChange: (v: T) => void;
   size?: "md" | "cash";
+  // Кнопки делят ширину контейнера поровну (2-3 варианта в ряд, как
+  // радиогруппа) — раньше это пытались получить снаружи через `grid
+  // grid-cols-N [&>button]:w-full`, что конфликтовало с display:flex
+  // самого компонента и на деле схлопывало ряд в колонку.
+  fill?: boolean;
   className?: string;
 }) {
   const h = size === "cash" ? "h-14 px-4" : "h-9 px-3";
   return (
-    <div className={`inline-flex flex-wrap gap-2 ${className}`} role="group">
+    <div className={`flex gap-2 ${fill ? "" : "inline-flex flex-wrap"} ${className}`} role="group">
       {options.map((o) => (
         <button
           key={o.value}
           type="button"
           onClick={() => onChange(o.value)}
           aria-pressed={value === o.value}
-          className={`${h} rounded-tag border text-sm font-medium transition-colors ${
+          className={`${h} ${fill ? "flex-1" : ""} rounded-tag border text-sm font-medium transition-colors ${
             value === o.value ? "bg-ink text-paper border-ink" : "bg-paper border-line hover:bg-paper-2"
           }`}
         >

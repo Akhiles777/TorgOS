@@ -15,7 +15,7 @@ export default async function OwnerPage() {
   const d = await ownerDashboard(db, 14);
 
   return (
-    <AppShell role={user.role} userName={user.name} active="owner" email={user.email} emailVerifiedAt={user.emailVerifiedAt}>
+    <AppShell role={user.role} userName={user.name} active="owner" email={user.email} emailVerifiedAt={user.emailVerifiedAt} impersonating={user.impersonating}>
       <h1 className="font-app-display text-2xl font-medium mb-1">Кабинет владельца</h1>
       <p className="text-ink-soft text-sm mb-5">Сводка за {d.windowDays} дней · считается из реальных чеков</p>
 

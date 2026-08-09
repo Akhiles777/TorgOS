@@ -15,7 +15,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const products = await listProducts(db, storeId, filter, sp.q);
 
   return (
-    <AppShell role={user.role} userName={user.name} active="admin" email={user.email} emailVerifiedAt={user.emailVerifiedAt}>
+    <AppShell role={user.role} userName={user.name} active="admin" email={user.email} emailVerifiedAt={user.emailVerifiedAt} impersonating={user.impersonating}>
       <AdminTabs />
       <ProductsManager products={products} filter={filter} query={sp.q ?? ""} />
     </AppShell>

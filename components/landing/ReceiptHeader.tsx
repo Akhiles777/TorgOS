@@ -1,9 +1,10 @@
 import { LinkButton } from "@/components/ui";
+import { dateLong } from "@/lib/format";
 
 // Верх страницы — не hero-картинка, а шапка настоящего кассового чека.
 // Дата — реальная сегодняшняя, печатается на сервере при каждом заходе.
 export function ReceiptHeader() {
-  const today = new Date().toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" });
+  const today = dateLong(new Date());
 
   return (
     <header className="px-5 pt-6 pb-8 sm:px-8 sm:pt-8 animate-print-in">

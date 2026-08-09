@@ -101,7 +101,8 @@ export function PaymentModal({
           <>
             <SegmentedControl
               size="cash"
-              className="grid grid-cols-2 mb-5 [&>button]:w-full"
+              fill
+              className="mb-5"
               value={method}
               onChange={setMethod}
               options={[

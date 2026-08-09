@@ -49,6 +49,15 @@ export async function listProducts(db: TenantDb, storeId: string, filter: Produc
   return mapped;
 }
 
+// Поиск по штрихкоду для сканера в админке (приход/быстрый просмотр/инвентаризация).
+// В отличие от POS-аналога (findByBarcode в server/services/pos.ts) не
+// фильтрует по isActive — снятый с продажи товар тоже нужно найти, например
+// когда пришла новая поставка и его пора вернуть в продажу.
+export async function findProductByBarcode(db: TenantDb, storeId: string, barcode: string): Promise<ProductRow | null> {
+  const found = await db.product.findFirst({ where: { storeId, barcode: barcode.trim() } });
+  return found ? row(found) : null;
+}
+
 export type ProductInput = {
   name: string;
   price: number;

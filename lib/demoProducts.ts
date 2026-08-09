@@ -28,6 +28,8 @@ const ROWS: Row[] = [
   { name: "Самса с говядиной", category: "Выпечка", price: 95, cost: 60, unit: "PCS", stock: 6 },
   { name: "Чуду с зеленью", category: "Выпечка", price: 120, cost: 75, unit: "PCS", stock: 6 },
   { name: "Лепёшка тандырная", category: "Выпечка", price: 45, cost: 25, unit: "PCS", stock: 10 },
+  { name: "Курзе с мясом (заморозка)", category: "Выпечка", price: 320, cost: 230, unit: "PCS", stock: 8 },
+  { name: "Лаваш тонкий", category: "Выпечка", price: 55, cost: 35, unit: "PCS", stock: 15 },
   { name: "Пахлава медовая", category: "Конфеты и сладости", price: 180, cost: 115, unit: "PCS", stock: 7 },
   { name: "Халва подсолнечная", category: "Конфеты и сладости", price: 240, cost: 165, unit: "KG", stock: 3 },
   { name: "Помидоры бакинские", category: "Овощи и фрукты", price: 350, cost: 270, unit: "KG", stock: 6, noBarcode: true },

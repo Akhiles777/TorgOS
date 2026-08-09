@@ -96,7 +96,7 @@ export function AssistantChat({ userName }: { userName: string }) {
                     <span className="block text-xs text-ink-soft mb-0.5">Единица</span>
                     <div className={it.matchedProductId ? "pointer-events-none opacity-50" : ""}>
                       <SegmentedControl
-                        className="grid grid-cols-2 [&>button]:w-full [&>button]:h-9 [&>button]:text-sm"
+                        fill
                         value={it.unit}
                         onChange={(u) => patch(i, { unit: u })}
                         options={[

@@ -20,6 +20,7 @@ export default async function PosPage() {
       accountName={user.name}
       employees={employees}
       currentShift={shift ? { id: shift.employee.id, name: shift.employee.name } : null}
+      impersonating={user.impersonating}
     />
   );
 }
