@@ -11,6 +11,7 @@ import { rootLogoutAction } from "@/app/root/logout/action";
 const LINKS = [
   { href: "/root", label: "Дашборд" },
   { href: "/root/organizations", label: "Организации" },
+  { href: "/root/analytics", label: "Аналитика" },
   { href: "/root/users", label: "Пользователи" },
   { href: "/root/audit", label: "Аудит" },
 ];

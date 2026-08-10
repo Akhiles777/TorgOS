@@ -31,7 +31,7 @@ export function PricingSection() {
         ))}
       </div>
       <div className="mt-10">
-        <LandingButton href="/register" size="lg">
+        <LandingButton href="/register" size="lg" trackId="pricing">
           Начать бесплатно
         </LandingButton>
       </div>

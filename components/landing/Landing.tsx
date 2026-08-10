@@ -17,6 +17,7 @@ import { PricingSection } from "./PricingSection";
 import { FaqSection } from "./FaqSection";
 import { FinalCta } from "./FinalCta";
 import { ScrollReveal } from "./ScrollReveal";
+import { SiteTracker } from "./SiteTracker";
 
 // v3: токены, шкалы и палитра — по спецификации заказчика буквально (см.
 // отчёт по шагам). Фирменный элемент по-прежнему один — карточка в «Как это
@@ -25,6 +26,7 @@ export function Landing() {
   return (
     <div className="min-h-dvh bg-land-paper font-landing-text">
       <ScrollReveal />
+      <SiteTracker />
       <LandingHeader />
       <main>
         <Hero />

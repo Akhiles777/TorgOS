@@ -48,6 +48,9 @@ const TENANT_WHERE: Record<Prisma.ModelName, (orgId: string) => Where> = {
   SuperAdmin: superAdminOnly,
   SuperAdminSession: superAdminOnly,
   SuperAdminAuditLog: superAdminOnly,
+  // Анонимные посетители лендинга — тоже вне организаций, тот же принцип.
+  SiteEvent: superAdminOnly,
+  PlatformBriefing: superAdminOnly,
 };
 
 // Скалярные внешние ключи, которые могут встретиться в data при create/update.

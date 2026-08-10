@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
 
 // Обёртка секции: ширина/поля/вертикальный ритм — по шкале из токенов
-// (max-w 1200px, поля 40px/24px = px-10/px-6, ритм между секциями 144px/96px
-// = py-36/py-24 — те же числа, что в спецификации, это стандартная шкала
-// Tailwind, отдельных токенов под неё заводить не пришлось).
+// (max-w 1200px, поля 40px/24px = px-10/px-6, ритм между разделами 96px/64px
+// = py-24/py-16 — сокращено с исходных 144/96 по правке «слишком много
+// воздуха». border-top на каждой секции — граница видна даже там, где
+// paper/surface слишком близки по тону, чтобы смена фона читалась сама).
 export function Section({
   tone = "paper",
   id,
@@ -19,7 +20,7 @@ export function Section({
 }) {
   const bg = { paper: "bg-land-paper", surface: "bg-land-surface", ink: "bg-land-ink" }[tone];
   return (
-    <section id={id} className={`${bg} py-24 md:py-36 ${className}`} data-reveal-section>
+    <section id={id} className={`${bg} border-t border-land-line py-16 md:py-24 ${className}`} data-reveal-section>
       <div className={`max-w-[1200px] mx-auto px-6 md:px-10 ${containerClassName}`}>{children}</div>
     </section>
   );

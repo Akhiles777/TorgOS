@@ -1,4 +1,5 @@
 import { Section, SectionHeading } from "./Section";
+import { Card } from "./Card";
 import { NotebookIcon, HiddenIcon, ClockIcon } from "./PainIcons";
 
 const PAINS = [
@@ -22,14 +23,16 @@ const PAINS = [
 export function ProblemSection() {
   return (
     <Section tone="surface">
-      <SectionHeading className="mb-16">Знакомо?</SectionHeading>
-      <div className="grid sm:grid-cols-3 gap-10 sm:gap-8">
+      <SectionHeading className="mb-10">Знакомо?</SectionHeading>
+      <div className="grid sm:grid-cols-3 gap-6">
         {PAINS.map(({ Icon, title, body }, i) => (
-          <div key={title} data-reveal data-reveal-delay={i}>
-            <Icon />
-            <h3 className="font-landing-display font-bold text-land-h3 text-land-ink mt-4 mb-2">{title}</h3>
-            <p className="font-landing-text text-land-body text-land-muted">{body}</p>
-          </div>
+          <Card key={title} className="p-6 sm:p-8 flex flex-col">
+            <div data-reveal data-reveal-delay={i}>
+              <Icon />
+              <h3 className="font-landing-display font-bold text-land-h3 text-land-ink mt-5 mb-2.5">{title}</h3>
+              <p className="font-landing-text text-land-body text-land-muted">{body}</p>
+            </div>
+          </Card>
         ))}
       </div>
     </Section>

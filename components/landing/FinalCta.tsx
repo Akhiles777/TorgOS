@@ -11,7 +11,7 @@ export function FinalCta() {
           Хватит тетради. Начать бесплатно.
         </h2>
         <div className="mt-10">
-          <LandingButton href="/register" size="lg">
+          <LandingButton href="/register" size="lg" trackId="final">
             Начать бесплатно
           </LandingButton>
         </div>

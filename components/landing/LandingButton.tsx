@@ -25,11 +25,21 @@ export function LandingButton({
   variant = "signal",
   size = "md",
   className = "",
+  trackId,
   children,
   ...rest
-}: Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href"> & { href: string; variant?: Variant; size?: Size; children: ReactNode }) {
+}: Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href"> & {
+  href: string;
+  variant?: Variant;
+  size?: Size;
+  // Помечает кнопку для SiteTracker.tsx (один делегированный click-листенер
+  // на всю страницу) — не onClick-проп, три из четырёх мест использования
+  // серверные компоненты, им нельзя передать функцию.
+  trackId?: string;
+  children: ReactNode;
+}) {
   return (
-    <Link href={href} className={`${base} ${sizes[size]} ${variants[variant]} ${className}`} {...rest}>
+    <Link href={href} className={`${base} ${sizes[size]} ${variants[variant]} ${className}`} data-track-cta={trackId} {...rest}>
       {children}
     </Link>
   );

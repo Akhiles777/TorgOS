@@ -53,6 +53,17 @@ enum SubscriptionStatus {
   SUSPENDED
 }
 
+// Тип события анонимного посетителя лендинга (не путать с бизнес-событиями
+// внутри приложения) — см. SiteEvent ниже.
+enum SiteEventType {
+  PAGEVIEW
+  SCROLL_25
+  SCROLL_50
+  SCROLL_75
+  SCROLL_100
+  CTA_CLICK
+}
+
 model Organization {
   id         String      @id @default(cuid())
   name       String
@@ -345,4 +356,36 @@ model SuperAdminAuditLog {
 
   @@index([superAdminId, createdAt])
   @@index([targetType, targetId])
+}
+
+// ── Аналитика публичного лендинга (анонимные посетители) ───────────────
+// Никакой связи с Organization/User намеренно — посетитель не идентифицирован
+// и не связан с последующей регистрацией (см. отчёт по фиче: конверсия
+// считается как два параллельных числа за период, а не как цепочка кликов
+// одного человека). sessionId живёт только в sessionStorage браузера —
+// обнуляется с закрытием вкладки, не постоянный трекинг-cookie.
+model SiteEvent {
+  id        String        @id @default(cuid())
+  type      SiteEventType
+  sessionId String
+  path      String
+  referrer  String?
+  utmSource String?
+  device    String?
+  cta       String?
+  createdAt DateTime      @default(now())
+
+  @@index([type, createdAt])
+  @@index([sessionId])
+  @@index([path, createdAt])
+}
+
+// Кеш ИИ-сводки для супер-админа — платформенный аналог AiBriefing, но без
+// ключа по организации (это про весь SaaS сразу), поэтому singleton-запись
+// с фиксированным id вместо @unique на внешний ключ.
+model PlatformBriefing {
+  id          String   @id @default("platform")
+  content     String
+  model       String
+  generatedAt DateTime @default(now())
 }

@@ -60,8 +60,8 @@
 
   /* Шкала кеглей лендинга — заданные clamp() с парным line-height, Tailwind v4
      сам генерит утилиты text-land-h1..text-land-mono-sm с нужным line-height. */
-  --text-land-h1: clamp(2.75rem, 6vw, 4.75rem); /* 44-76px */
-  --text-land-h1--line-height: 1.05;
+  --text-land-h1: clamp(2.25rem, 4vw, 3.5rem); /* 36-56px */
+  --text-land-h1--line-height: 1.08;
   --text-land-h2: clamp(1.875rem, 3.5vw, 2.75rem); /* 30-44px */
   --text-land-h2--line-height: 1.15;
   --text-land-h3: 1.375rem; /* 22px */

@@ -9,7 +9,16 @@
       "Bash(npx --no-install playwright --version)",
       "Bash(pkill -f \"node server.mjs\")",
       "Bash(python3 -)",
-      "Bash(npm install *)"
+      "Bash(npm install *)",
+      "Bash(brew list *)",
+      "Read(//opt/homebrew/var/**)",
+      "Read(//usr/local/**)",
+      "Bash(/opt/homebrew/opt/postgresql@14/bin/pg_ctl -D /opt/homebrew/var/postgresql@14 -l /opt/homebrew/var/log/postgresql@14.log start)",
+      "Bash(PGPASSWORD= psql -U a1111 -h localhost -d redstore -c \"select 1;\")",
+      "Bash(psql -U a1111 -h localhost -d redstore -c 'select id, email, name, \"createdAt\" from \"SuperAdmin\";')",
+      "Bash(curl -s -o /tmp/rootlogin.html -w \"%{http_code}\\\\n\" https://storeos.online/root/login)",
+      "Bash(grep -o '\"\\\\$ACTION_[^\"]*\"' /tmp/rootlogin.html)",
+      "Bash(grep -o 'action-[a-f0-9]\\\\{40,\\\\}' /tmp/rootlogin.html)"
     ]
   }
 }

@@ -28,7 +28,7 @@ export function LandingHeader() {
           <LandingButton href="/login" variant="ghost" size="md" className="px-2 sm:px-3 h-auto py-2">
             Войти
           </LandingButton>
-          <LandingButton href="/register" variant="signal" size="md">
+          <LandingButton href="/register" variant="signal" size="md" trackId="header">
             Начать бесплатно
           </LandingButton>
         </nav>
