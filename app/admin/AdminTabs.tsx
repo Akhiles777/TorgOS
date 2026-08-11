@@ -6,13 +6,14 @@ export function AdminTabs() {
   const path = usePathname();
   const tabs = [
     { href: "/admin", label: "Товары" },
-    { href: "/admin/import", label: "Импорт" },
-    { href: "/admin/cameras", label: "Камеры" },
     { href: "/admin/assistant", label: "Приёмка ИИ" },
     { href: "/admin/inventory", label: "Инвентаризация" },
     { href: "/admin/receipts", label: "Чеки за день" },
     { href: "/admin/debts", label: "Долги" },
     { href: "/admin/staff", label: "Сотрудники" },
+    // Реже используемые разделы — намеренно последними в списке вкладок.
+    { href: "/admin/import", label: "Импорт" },
+    { href: "/admin/cameras", label: "Камеры" },
   ];
   return (
     <div className="flex gap-1 border-b border-line mb-5 -mt-1 overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0">

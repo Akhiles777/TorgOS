@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useState } from "react";
+import Link from "next/link";
 import { SegmentedControl, EmptyState } from "@/components/ui";
 import { CameraTile } from "@/components/cameras/CameraTile";
 import { useAgentStatus } from "@/components/cameras/useAgentStatus";
@@ -39,7 +40,13 @@ export function CamerasLiveScreen({ stores, camerasByStore }: { stores: StoreOpt
       </div>
 
       {cameras.length === 0 ? (
-        <EmptyState>Камер пока нет — добавьте регистратор в настройках камер.</EmptyState>
+        <EmptyState>
+          Камер пока нет —{" "}
+          <Link href="/admin/cameras/settings" className="underline underline-offset-2 hover:text-ink">
+            добавьте регистратор в настройках камер
+          </Link>
+          .
+        </EmptyState>
       ) : (
         <div className={`grid ${gridCols} gap-3`}>
           {cameras.map((c) => (
