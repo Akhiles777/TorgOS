@@ -1,4 +1,5 @@
 // Долги — чеки, пробитые «в долг». Пока debtPaidAt пустой — долг открыт.
+import type { Unit } from "@prisma/client";
 import type { TenantDb } from "../tenant";
 import { toNum } from "@/lib/format";
 
@@ -10,7 +11,7 @@ export type DebtRow = {
   debtorContact: string | null;
   createdAt: string;
   paidAt: string | null;
-  items: { name: string; quantity: number; unit: "PCS" | "KG"; priceAtSale: number }[];
+  items: { name: string; quantity: number; unit: Unit; priceAtSale: number }[];
 };
 
 export async function listDebts(db: TenantDb, storeId: string, includePaid = false) {

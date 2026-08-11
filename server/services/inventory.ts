@@ -1,7 +1,7 @@
 // Инвентаризация: пересчёт остатков по точке через сканер. Один активный
 // сеанс на точку. Пока сеанс открыт — сканы копят «факт», база не трогается;
 // применяются расхождения только по явному «Завершить и применить».
-import { Prisma } from "@prisma/client";
+import { Prisma, type Unit } from "@prisma/client";
 import type { TenantDb } from "../tenant";
 import { toNum } from "@/lib/format";
 
@@ -11,7 +11,7 @@ export type InventoryLineRow = {
   id: string;
   productId: string;
   name: string;
-  unit: "PCS" | "KG";
+  unit: Unit;
   expectedQty: number;
   countedQty: number;
   countedAt: string;
@@ -24,7 +24,7 @@ export type InventorySessionRow = {
   lines: InventoryLineRow[];
 };
 
-function lineRow(l: { id: string; productId: string; expectedQty: Prisma.Decimal; countedQty: Prisma.Decimal; countedAt: Date; product: { name: string; unit: "PCS" | "KG" } }): InventoryLineRow {
+function lineRow(l: { id: string; productId: string; expectedQty: Prisma.Decimal; countedQty: Prisma.Decimal; countedAt: Date; product: { name: string; unit: Unit } }): InventoryLineRow {
   return {
     id: l.id,
     productId: l.productId,
@@ -58,7 +58,7 @@ export async function startSession(db: TenantDb, storeId: string, userId: string
   return session.id;
 }
 
-type FoundProduct = { id: string; name: string; unit: "PCS" | "KG"; stock: Prisma.Decimal };
+type FoundProduct = { id: string; name: string; unit: Unit; stock: Prisma.Decimal };
 
 // Общая логика зачёта одной позиции — используется и сканом по штрихкоду,
 // и ручным добавлением по поиску (товары без штрихкода: овощи, зелень).

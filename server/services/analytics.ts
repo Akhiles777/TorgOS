@@ -1,4 +1,5 @@
 // Аналитика владельца: всё считается из реальных чеков (никаких фейков в UI).
+import type { Unit } from "@prisma/client";
 import type { TenantDb } from "../tenant";
 import { toNum } from "@/lib/format";
 import { generateInsights, type ProductStat, type Insight } from "../insights";
@@ -13,7 +14,7 @@ export type StoreSummary = {
   marginWindow: number; // валовая прибыль за окно (выручка − себестоимость проданного)
 };
 
-export type ProductRank = { id: string; name: string; unit: "PCS" | "KG"; qty: number; revenue: number; margin: number };
+export type ProductRank = { id: string; name: string; unit: Unit; qty: number; revenue: number; margin: number };
 
 export type OwnerDashboard = {
   windowDays: number;

@@ -1,5 +1,5 @@
 // Сервис кассы. Всё через tenantDb — изоляция по организации гарантирована слоем.
-import { Prisma, type PaymentMethod } from "@prisma/client";
+import { Prisma, type PaymentMethod, type Unit } from "@prisma/client";
 import type { TenantDb } from "../tenant";
 import { prisma } from "../db";
 import { toNum } from "@/lib/format";
@@ -20,14 +20,14 @@ export type PosProduct = {
   barcode: string | null;
   name: string;
   price: number;
-  unit: "PCS" | "KG";
+  unit: Unit;
   category: string;
   stock: number;
   showInPos: boolean;
 };
 
 function shape(p: {
-  id: string; barcode: string | null; name: string; price: Prisma.Decimal; unit: "PCS" | "KG"; category: string; stock: Prisma.Decimal; showInPos: boolean;
+  id: string; barcode: string | null; name: string; price: Prisma.Decimal; unit: Unit; category: string; stock: Prisma.Decimal; showInPos: boolean;
 }): PosProduct {
   return { id: p.id, barcode: p.barcode, name: p.name, price: toNum(p.price), unit: p.unit, category: p.category, stock: toNum(p.stock), showInPos: p.showInPos };
 }

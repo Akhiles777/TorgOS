@@ -5,6 +5,8 @@
 //
 // Никаких выдуманных «советов» в UI: если правило не сработало — секция пустая.
 
+import type { Unit } from "@prisma/client";
+
 export type Severity = "info" | "warn" | "danger";
 
 export type Insight = {
@@ -19,7 +21,7 @@ export type Insight = {
 export type ProductStat = {
   id: string;
   name: string;
-  unit: "PCS" | "KG";
+  unit: Unit;
   price: number;
   costPrice: number;
   stock: number;

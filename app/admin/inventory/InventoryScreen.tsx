@@ -8,8 +8,9 @@ import {
   startSessionAction, scanItemAction, addManualLineAction, setLineCountAction, removeLineAction, cancelSessionAction, finishSessionAction,
 } from "./actions";
 import type { InventorySessionRow, InventoryLineRow } from "@/server/services/inventory";
+import type { Unit } from "@prisma/client";
 
-type ProductRef = { id: string; name: string; unit: "PCS" | "KG"; category: string; barcode: string | null };
+type ProductRef = { id: string; name: string; unit: Unit; category: string; barcode: string | null };
 type WeightPrompt = { source: "scan"; barcode: string; name: string } | { source: "manual"; productId: string; name: string };
 type Flash = { kind: "add" | "error"; text: string } | null;
 

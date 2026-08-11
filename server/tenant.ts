@@ -55,12 +55,25 @@ const TENANT_WHERE: Record<Prisma.ModelName, (orgId: string) => Where> = {
   StoreAgent: (orgId) => ({ store: { organizationId: orgId } }),
   CameraDevice: (orgId) => ({ store: { organizationId: orgId } }),
   Camera: (orgId) => ({ device: { store: { organizationId: orgId } } }),
+  // ── Общепит (HORECA) ──
+  MenuCategory: (orgId) => ({ store: { organizationId: orgId } }),
+  MenuItem: (orgId) => ({ store: { organizationId: orgId } }),
+  ModifierGroup: (orgId) => ({ store: { organizationId: orgId } }),
+  MenuItemModifierGroup: (orgId) => ({ menuItem: { store: { organizationId: orgId } } }),
+  Modifier: (orgId) => ({ group: { store: { organizationId: orgId } } }),
+  // Владелец рецепта опционален с обеих сторон (menuItemId/ownerProductId),
+  // а ингредиент обязателен — скоупим по нему: он всегда товар точки.
+  RecipeLine: (orgId) => ({ product: { store: { organizationId: orgId } } }),
+  Order: (orgId) => ({ store: { organizationId: orgId } }),
+  OrderItem: (orgId) => ({ order: { store: { organizationId: orgId } } }),
+  ProductionDoc: (orgId) => ({ store: { organizationId: orgId } }),
+  ProductionLine: (orgId) => ({ doc: { store: { organizationId: orgId } } }),
 };
 
 // Скалярные внешние ключи, которые могут встретиться в data при create/update.
 type FkTarget =
   | "store" | "product" | "sale" | "user" | "employee" | "inventorySession" | "importBatch"
-  | "storeAgent" | "cameraDevice";
+  | "storeAgent" | "cameraDevice" | "menuItem" | "menuCategory" | "modifierGroup" | "order" | "productionDoc";
 const FK_TARGETS: Record<string, FkTarget> = {
   storeId: "store",
   productId: "product",
@@ -72,6 +85,18 @@ const FK_TARGETS: Record<string, FkTarget> = {
   importBatchId: "importBatch",
   agentId: "storeAgent",
   deviceId: "cameraDevice",
+  // ── Общепит (HORECA) ── addProductId/replacesProductId живут и в снимке
+  // OrderItem.modifiers (Json) — collectFks рекурсивно обходит объекты,
+  // поэтому эти ключи проверяются и там. Не переименовывать без синхронной
+  // правки здесь.
+  menuItemId: "menuItem",
+  categoryId: "menuCategory",
+  groupId: "modifierGroup",
+  ownerProductId: "product",
+  addProductId: "product",
+  replacesProductId: "product",
+  orderId: "order",
+  productionDocId: "productionDoc",
 };
 
 function collectFks(data: unknown, acc: Record<FkTarget, Set<string>>) {
@@ -93,6 +118,8 @@ async function assertFksBelongToOrg(orgId: string, data: unknown, organizationId
     store: new Set<string>(), product: new Set<string>(), sale: new Set<string>(),
     user: new Set<string>(), employee: new Set<string>(), inventorySession: new Set<string>(),
     importBatch: new Set<string>(), storeAgent: new Set<string>(), cameraDevice: new Set<string>(),
+    menuItem: new Set<string>(), menuCategory: new Set<string>(), modifierGroup: new Set<string>(),
+    order: new Set<string>(), productionDoc: new Set<string>(),
   };
   collectFks(data, acc);
   const checks: Promise<void>[] = [];
@@ -107,6 +134,11 @@ async function assertFksBelongToOrg(orgId: string, data: unknown, organizationId
   if (acc.importBatch.size) check(prisma.importBatch.count({ where: { id: { in: [...acc.importBatch] }, store: { organizationId: orgId } } }), acc.importBatch.size);
   if (acc.storeAgent.size) check(prisma.storeAgent.count({ where: { id: { in: [...acc.storeAgent] }, store: { organizationId: orgId } } }), acc.storeAgent.size);
   if (acc.cameraDevice.size) check(prisma.cameraDevice.count({ where: { id: { in: [...acc.cameraDevice] }, store: { organizationId: orgId } } }), acc.cameraDevice.size);
+  if (acc.menuItem.size) check(prisma.menuItem.count({ where: { id: { in: [...acc.menuItem] }, store: { organizationId: orgId } } }), acc.menuItem.size);
+  if (acc.menuCategory.size) check(prisma.menuCategory.count({ where: { id: { in: [...acc.menuCategory] }, store: { organizationId: orgId } } }), acc.menuCategory.size);
+  if (acc.modifierGroup.size) check(prisma.modifierGroup.count({ where: { id: { in: [...acc.modifierGroup] }, store: { organizationId: orgId } } }), acc.modifierGroup.size);
+  if (acc.order.size) check(prisma.order.count({ where: { id: { in: [...acc.order] }, store: { organizationId: orgId } } }), acc.order.size);
+  if (acc.productionDoc.size) check(prisma.productionDoc.count({ where: { id: { in: [...acc.productionDoc] }, store: { organizationId: orgId } } }), acc.productionDoc.size);
   await Promise.all(checks);
 }
 

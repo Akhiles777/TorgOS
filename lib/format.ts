@@ -1,6 +1,8 @@
 // Форматирование денег/веса. Prisma.Decimal приходит строкой/объектом —
 // работаем через строку, чтобы не терять копейки во float.
 
+import type { Unit } from "@prisma/client";
+
 export function toNum(v: unknown): number {
   if (v == null) return 0;
   if (typeof v === "number") return v;
@@ -32,15 +34,23 @@ export function money0(v: unknown): string {
   return `${int.replace(/\B(?=(\d{3})+(?!\d))/g, " ")},${frac}`;
 }
 
-// Количество: штуки без дробей, вес — до 3 знаков без хвостовых нулей
-export function qty(v: unknown, unit: "PCS" | "KG"): string {
+// Количество: штуки без дробей, вес/объём — до 3 знаков без хвостовых нулей.
+// G/ML/L — единицы ингредиентов в рецептах общепита (см. RecipeLine),
+// розничные Product всегда PCS/KG.
+export function qty(v: unknown, unit: Unit): string {
   const n = toNum(v);
   if (unit === "PCS") return String(Math.round(n));
   return n.toFixed(3).replace(/\.?0+$/, "").replace(".", ",");
 }
 
-export function unitLabel(unit: "PCS" | "KG"): string {
-  return unit === "KG" ? "кг" : "шт";
+export function unitLabel(unit: Unit): string {
+  switch (unit) {
+    case "KG": return "кг";
+    case "G": return "г";
+    case "ML": return "мл";
+    case "L": return "л";
+    default: return "шт";
+  }
 }
 
 export function dateShort(d: Date | string): string {

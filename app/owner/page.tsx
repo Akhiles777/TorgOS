@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { requireRole } from "@/server/guard";
-import { ownerDashboard } from "@/server/services/analytics";
+import { ownerDashboard, type ProductRank } from "@/server/services/analytics";
 import { AppShell } from "@/components/AppShell";
 import { ReadoutPanel, PriceTag } from "@/components/ui";
 import { money, money0, plural } from "@/lib/format";
@@ -86,7 +86,7 @@ export default async function OwnerPage() {
   );
 }
 
-function RankTable({ title, subtitle, rows }: { title: string; subtitle: string; rows: { id: string; name: string; unit: "PCS" | "KG"; qty: number; revenue: number; margin: number }[] }) {
+function RankTable({ title, subtitle, rows }: { title: string; subtitle: string; rows: ProductRank[] }) {
   return (
     <section className="bg-paper-2 border border-line rounded-tag p-4">
       <div className="flex items-baseline justify-between mb-3">

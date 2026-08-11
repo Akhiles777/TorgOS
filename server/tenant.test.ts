@@ -6,7 +6,7 @@ import { tenantDb, TenantError } from "./tenant";
 
 const prisma = new PrismaClient();
 
-let orgA = "", orgB = "", storeB = "", productB = "";
+let orgA = "", orgB = "", storeA = "", storeB = "", productB = "", userA = "", menuItemA = "", menuItemB = "";
 
 beforeAll(async () => {
   const a = await prisma.organization.create({
@@ -22,8 +22,19 @@ beforeAll(async () => {
   });
   orgA = a.id;
   orgB = b.id;
+  storeA = a.stores[0].id;
   storeB = b.stores[0].id;
   productB = b.stores[0].products[0].id;
+
+  const ownerA = await prisma.user.create({
+    data: { organizationId: orgA, storeId: storeA, role: "OWNER", name: "o", login: `owner-a-${Date.now()}`, passwordHash: "x" },
+  });
+  userA = ownerA.id;
+
+  const miA = await prisma.menuItem.create({ data: { storeId: storeA, name: "Блюдо A", price: 100 } });
+  menuItemA = miA.id;
+  const miB = await prisma.menuItem.create({ data: { storeId: storeB, name: "Блюдо B", price: 100 } });
+  menuItemB = miB.id;
 });
 
 afterAll(async () => {
@@ -92,5 +103,43 @@ describe("tenant-изоляция", () => {
     expect(res.count).toBe(0);
     const stillActive = await prisma.product.findUnique({ where: { id: productB } });
     expect(stillActive!.isActive).toBe(true);
+  });
+
+  // ── Общепит (HORECA): те же гарантии для новых моделей ──
+  it("A не видит MenuItem/Order организации B", async () => {
+    const dbA = tenantDb(orgA);
+    expect(await dbA.menuItem.findUnique({ where: { id: menuItemB } })).toBeNull();
+    const items = await dbA.menuItem.findMany();
+    expect(items.find((i) => i.id === menuItemB)).toBeUndefined();
+  });
+
+  it("A не может создать MenuItem в точке B", async () => {
+    const dbA = tenantDb(orgA);
+    await expect(dbA.menuItem.create({ data: { storeId: storeB, name: "инъекция", price: 1 } })).rejects.toThrow(TenantError);
+  });
+
+  it("A не может создать Order, ссылающийся на MenuItem B", async () => {
+    const dbA = tenantDb(orgA);
+    await expect(
+      dbA.order.create({
+        data: {
+          storeId: storeA, userId: userA,
+          items: { create: { menuItemId: menuItemB, nameAtSale: "инъекция", quantity: 1, priceAtSale: 100, costAtSale: 0 } },
+        },
+      }),
+    ).rejects.toThrow(TenantError);
+  });
+
+  it("OrderItem со снимком модификатора, ссылающимся на чужой addProductId, падает TenantError", async () => {
+    const dbA = tenantDb(orgA);
+    const order = await dbA.order.create({ data: { storeId: storeA, userId: userA } });
+    await expect(
+      dbA.orderItem.create({
+        data: {
+          orderId: order.id, menuItemId: menuItemA, nameAtSale: "Блюдо A", quantity: 1, priceAtSale: 100, costAtSale: 0,
+          modifiers: [{ modifierId: "x", name: "чужой ингредиент", priceDelta: 0, addProductId: productB }],
+        },
+      }),
+    ).rejects.toThrow(TenantError);
   });
 });

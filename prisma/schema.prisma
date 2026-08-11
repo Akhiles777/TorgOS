@@ -27,6 +27,21 @@ enum Role {
 enum Unit {
   PCS
   KG
+  // Граммы/мл/литры — единицы ингредиентов в рецептах общепита (см. RecipeLine).
+  // Розничные Product всегда PCS/KG, эти значения для них недостижимы.
+  G
+  ML
+  L
+}
+
+// Статус заказа общепита (открытая «комната» до оплаты — не путать с чеком/Sale,
+// который создаётся только в момент оплаты). См. модель Order.
+enum OrderStatus {
+  OPEN
+  COOKING
+  SERVED
+  PAID
+  CANCELLED
 }
 
 enum MovementType {
@@ -106,6 +121,12 @@ model Store {
   importBatches     ImportBatch[]
   storeAgents       StoreAgent[]
   cameraDevices     CameraDevice[]
+  // ── Общепит (HORECA) ── для RETAIL-организаций эти отношения всегда пусты.
+  menuCategories    MenuCategory[]
+  menuItems         MenuItem[]
+  modifierGroups    ModifierGroup[]
+  orders            Order[]
+  productionDocs    ProductionDoc[]
 
   @@index([organizationId])
 }
@@ -122,6 +143,7 @@ model Employee {
   createdAt DateTime @default(now())
   shifts    Shift[]
   sales     Sale[]
+  orders    Order[]
 
   @@index([storeId])
 }
@@ -156,6 +178,8 @@ model User {
   movements                StockMovement[]
   inventorySessionsStarted InventorySession[]
   importBatches            ImportBatch[]
+  orders                   Order[]
+  productionDocs           ProductionDoc[]
 
   // Самостоятельная регистрация (/register): email = логин владельца.
   // Nullable — у сотрудников, заведённых владельцем внутри кабинета,
@@ -207,6 +231,17 @@ model Product {
   // существующей позиции (дедуп «обновить цену»/«обновить всё»). Иначе откат
   // импорта удалил бы товар, который существовал до импорта. См. ImportBatch.
   importBatchId  String?
+  // Полуфабрикат общепита (тесто, соус, сироп) — сам имеет рецепт (ownRecipe)
+  // и производится через ProductionDoc, а не покупается напрямую. Для розницы
+  // всегда false — флаг выставляется только на экране /admin/recipes.
+  isSemiFinished    Boolean          @default(false)
+  // ── Общепит (HORECA) ── для RETAIL-организаций все отношения ниже всегда пусты.
+  recipeUsages      RecipeLine[]     @relation("RecipeIngredient")
+  ownRecipe         RecipeLine[]     @relation("SemiProductRecipe")
+  modifierAdds      Modifier[]       @relation("ModifierAdd")
+  modifierReplaces  Modifier[]       @relation("ModifierReplace")
+  productionDocs    ProductionDoc[]
+  productionLines   ProductionLine[]
 
   @@unique([storeId, barcode])
   @@index([storeId, category])
@@ -271,6 +306,10 @@ model Sale {
   debtPaidAt    DateTime?
   createdAt     DateTime      @default(now())
   items         SaleItem[]
+  // Общепит: если продажа пришла из заказа (оплата в HORECA-режиме кассы),
+  // строки чека — в order.items (OrderItem), а НЕ в SaleItem (items выше
+  // остаётся пустым). Для розницы order всегда null. См. Order.saleId.
+  order         Order?
 
   @@index([storeId, createdAt])
   @@index([employeeId])
@@ -506,4 +545,205 @@ model Camera {
 
   @@unique([deviceId, channel])
   @@index([deviceId])
+}
+
+// ── Общепит (HORECA) ───────────────────────────────────────────────────────
+// Кафе продаёт блюдо (MenuItem), а списывает по рецепту ингредиенты (обычные
+// Product-строки) — не само блюдо. Для RETAIL-организаций все модели этого
+// блока всегда остаются пустыми (org.type проверяется на уровне UI/сервисов,
+// не в БД — см. server/org.ts). См. отчёт по фиче для деталей решений.
+
+model MenuCategory {
+  id        String     @id @default(cuid())
+  storeId   String
+  store     Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name      String
+  position  Int        @default(0)
+  isActive  Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  items     MenuItem[]
+
+  @@unique([storeId, name])
+  @@index([storeId, position])
+}
+
+model MenuItem {
+  id             String                  @id @default(cuid())
+  storeId        String
+  store          Store                   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  categoryId     String?
+  category       MenuCategory?           @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  name           String
+  description    String?
+  price          Decimal                 @db.Decimal(10, 2)
+  isActive       Boolean                 @default(true)
+  position       Int                     @default(0)
+  // null = рецепт не задан (это НЕ ноль: 0 означает «рецепт есть, ингредиенты
+  // бесплатны»). Пересчитывается server/services/horeca/costing.ts.
+  cachedCost     Decimal?                @db.Decimal(10, 2)
+  cachedCostAt   DateTime?
+  createdAt      DateTime                @default(now())
+  recipe         RecipeLine[]
+  modifierGroups MenuItemModifierGroup[]
+  orderItems     OrderItem[]
+
+  @@index([storeId, isActive])
+  @@index([categoryId, position])
+}
+
+// Общая, переиспользуемая группа модификаторов (молоко/сироп/размер) — не
+// привязана к одному блюду, привязка — через MenuItemModifierGroup ниже.
+model ModifierGroup {
+  id         String                   @id @default(cuid())
+  storeId    String
+  store      Store                    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name       String
+  isRequired Boolean                  @default(false)
+  maxChoices Int                      @default(1)
+  createdAt  DateTime                 @default(now())
+  modifiers  Modifier[]
+  menuItems  MenuItemModifierGroup[]
+
+  @@index([storeId])
+}
+
+// Привязка группы модификаторов к конкретному блюду (многие-ко-многим) +
+// порядок показа группы именно в этом блюде.
+model MenuItemModifierGroup {
+  id         String        @id @default(cuid())
+  menuItemId String
+  menuItem   MenuItem      @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  groupId    String
+  group      ModifierGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  position   Int           @default(0)
+
+  @@unique([menuItemId, groupId])
+  @@index([groupId])
+}
+
+model Modifier {
+  id                String        @id @default(cuid())
+  groupId           String
+  group             ModifierGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  name              String
+  priceDelta        Decimal       @default(0) @db.Decimal(10, 2)
+  // Добавить ингредиент сверх рецепта (доп. сироп, доп. шот) — addQuantity в
+  // единицах addProduct.unit.
+  addProductId      String?
+  addProduct        Product?      @relation("ModifierAdd", fields: [addProductId], references: [id], onDelete: Restrict)
+  addQuantity       Decimal?      @db.Decimal(10, 3)
+  // Заменить/убрать ингредиент рецепта (растительное молоко вместо коровьего,
+  // без сахара).
+  replacesProductId String?
+  replacesProduct   Product?      @relation("ModifierReplace", fields: [replacesProductId], references: [id], onDelete: Restrict)
+  position          Int           @default(0)
+  isActive          Boolean       @default(true)
+
+  @@index([groupId, position])
+}
+
+// Рецепт: владелец — РОВНО ОДИН из menuItemId / ownerProductId (рецепт блюда
+// либо рецепт полуфабриката — см. CHECK-constraint, дописанный вручную в
+// миграцию). Ингредиент — всегда обычный Product (сам может быть
+// isSemiFinished). quantity — в единицах product.unit.
+model RecipeLine {
+  id             String    @id @default(cuid())
+  menuItemId     String?
+  menuItem       MenuItem? @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  ownerProductId String?
+  ownerProduct   Product?  @relation("SemiProductRecipe", fields: [ownerProductId], references: [id], onDelete: Cascade)
+  productId      String
+  product        Product   @relation("RecipeIngredient", fields: [productId], references: [id], onDelete: Restrict)
+  quantity       Decimal   @db.Decimal(10, 3)
+  createdAt      DateTime  @default(now())
+
+  @@unique([menuItemId, productId])
+  @@unique([ownerProductId, productId])
+  @@index([productId])
+}
+
+// Заказ — «открытая комната» до оплаты, НЕ чек. Sale создаётся только в
+// момент оплаты (server/services/horeca/orders.ts::payOrder), через
+// createSaleRecord — единственную точку создания Sale в проекте.
+model Order {
+  id          String      @id @default(cuid())
+  number      Int         @default(autoincrement())
+  storeId     String
+  store       Store       @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  status      OrderStatus @default(OPEN)
+  userId      String
+  user        User        @relation(fields: [userId], references: [id])
+  employeeId  String?
+  employee    Employee?   @relation(fields: [employeeId], references: [id])
+  comment     String?
+  createdAt   DateTime    @default(now())
+  paidAt      DateTime?
+  cancelledAt DateTime?
+  saleId      String?     @unique
+  sale        Sale?       @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  items       OrderItem[]
+
+  @@index([storeId, status])
+  @@index([storeId, createdAt])
+}
+
+model OrderItem {
+  id          String   @id @default(cuid())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItemId  String
+  menuItem    MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Restrict)
+  // Снимок названия на момент добавления в заказ — блюдо может быть
+  // переименовано/снято с меню позже, чек должен остаться читаемым.
+  nameAtSale  String
+  quantity    Decimal  @db.Decimal(10, 3)
+  // Цена блюда + Σ priceDelta выбранных модификаторов, за единицу.
+  priceAtSale Decimal  @db.Decimal(10, 2)
+  // Снимок MenuItem.cachedCost на момент продажи — для аналитики прибыли.
+  costAtSale  Decimal  @db.Decimal(10, 2)
+  // [{modifierId,name,priceDelta,addProductId,addQuantity,replacesProductId}]
+  // ВНИМАНИЕ: ключи addProductId/replacesProductId здесь проверяются
+  // tenant-изоляцией (server/tenant.ts::collectFks рекурсивно обходит Json) —
+  // не переименовывать без синхронной правки FK_TARGETS.
+  modifiers   Json?
+  comment     String?
+  createdAt   DateTime @default(now())
+
+  @@index([orderId])
+  @@index([menuItemId])
+}
+
+// Документ производства полуфабриката: «замесили 8кг теста» — списывает
+// сырьё по СОБСТВЕННОМУ рецепту полуфабриката (Product.ownRecipe), начисляет
+// сток самого полуфабриката. В отличие от кассы — недостача здесь блокирует
+// проведение (бэк-офис, не гость у кассы).
+model ProductionDoc {
+  id        String           @id @default(cuid())
+  number    Int              @default(autoincrement())
+  storeId   String
+  store     Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product          @relation(fields: [productId], references: [id], onDelete: Restrict)
+  quantity  Decimal          @db.Decimal(10, 3)
+  unitCost  Decimal          @db.Decimal(10, 2)
+  totalCost Decimal          @db.Decimal(10, 2)
+  userId    String
+  user      User             @relation(fields: [userId], references: [id])
+  comment   String?
+  createdAt DateTime         @default(now())
+  lines     ProductionLine[]
+
+  @@index([storeId, createdAt])
+}
+
+model ProductionLine {
+  id              String        @id @default(cuid())
+  productionDocId String
+  doc             ProductionDoc @relation(fields: [productionDocId], references: [id], onDelete: Cascade)
+  productId       String
+  product         Product       @relation(fields: [productId], references: [id], onDelete: Restrict)
+  quantity        Decimal       @db.Decimal(10, 3)
+  costAtMoment    Decimal       @db.Decimal(10, 2)
+
+  @@index([productionDocId])
 }

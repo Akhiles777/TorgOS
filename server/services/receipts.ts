@@ -3,7 +3,7 @@ import type { TenantDb } from "../tenant";
 import { toNum } from "@/lib/format";
 import { hash } from "bcryptjs";
 import { prisma } from "../db";
-import type { Role } from "@prisma/client";
+import type { Role, Unit } from "@prisma/client";
 
 export type ReceiptRow = {
   id: string;
@@ -13,7 +13,7 @@ export type ReceiptRow = {
   cashier: string;
   createdAt: string;
   itemCount: number;
-  items: { name: string; quantity: number; unit: "PCS" | "KG"; priceAtSale: number }[];
+  items: { name: string; quantity: number; unit: Unit; priceAtSale: number }[];
 };
 
 export async function listReceiptsForDay(db: TenantDb, storeId: string, day?: Date) {
