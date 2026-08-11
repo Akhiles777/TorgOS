@@ -43,8 +43,23 @@ services:
       AUTH_SECRET: ${AUTH_SECRET:?нужно задать AUTH_SECRET в .env}
       ROUTERAI_API_KEY: ${ROUTERAI_API_KEY:-}
       ROUTERAI_MODEL: ${ROUTERAI_MODEL:-anthropic/claude-sonnet-5}
+      CAMERA_ENCRYPTION_KEY: ${CAMERA_ENCRYPTION_KEY:?нужно задать CAMERA_ENCRYPTION_KEY в .env}
+      GO2RTC_DIRECT_URL: "http://go2rtc:1984"
     ports:
       - "${APP_PORT:-3000}:3000"
+
+  # go2rtc для камер в режиме connection=DIRECT (клиент с белым IP, сам
+  # открыл порт на регистраторе) — тянет RTSP напрямую, без агента на месте.
+  # Камеры за NAT (connection=AGENT, основной случай) через этот сервис НЕ
+  # идут — там свой go2rtc на мини-ПК в магазине, см. agent/README.md.
+  go2rtc:
+    image: alexxit/go2rtc:latest
+    restart: unless-stopped
+    volumes:
+      - go2rtc-config:/config
+    # Наружу не публикуем — доступен только контейнеру app по внутренней сети
+    expose:
+      - "1984"
 
   backup:
     image: postgres:16-bookworm
@@ -68,4 +83,6 @@ volumes:
   pgdata:
     driver: local
   pgbackups:
+    driver: local
+  go2rtc-config:
     driver: local

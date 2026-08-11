@@ -6,6 +6,7 @@ export default defineConfig({
     environment: "node",
     // Тесты ходят в реальную БД — гоняем последовательно, чтобы не пересекались
     fileParallelism: false,
+    setupFiles: ["./vitest.setup.ts"],
   },
   resolve: {
     alias: {

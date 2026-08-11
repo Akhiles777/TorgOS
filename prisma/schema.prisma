@@ -103,6 +103,9 @@ model Store {
   employees         Employee[]
   shifts            Shift[]
   inventorySessions InventorySession[]
+  importBatches     ImportBatch[]
+  storeAgents       StoreAgent[]
+  cameraDevices     CameraDevice[]
 
   @@index([organizationId])
 }
@@ -152,6 +155,7 @@ model User {
   sales                    Sale[]
   movements                StockMovement[]
   inventorySessionsStarted InventorySession[]
+  importBatches            ImportBatch[]
 
   // Самостоятельная регистрация (/register): email = логин владельца.
   // Nullable — у сотрудников, заведённых владельцем внутри кабинета,
@@ -199,9 +203,35 @@ model Product {
   movements      StockMovement[]
   saleItems      SaleItem[]
   inventoryLines InventoryLine[]
+  // Проставляется только при СОЗДАНИИ товара импортом — не при обновлении уже
+  // существующей позиции (дедуп «обновить цену»/«обновить всё»). Иначе откат
+  // импорта удалил бы товар, который существовал до импорта. См. ImportBatch.
+  importBatchId  String?
 
   @@unique([storeId, barcode])
   @@index([storeId, category])
+  @@index([importBatchId])
+}
+
+// Один запуск импорта номенклатуры из файла (app/admin/import/). rowsImported
+// считает только СОЗДАННЫЕ товары (у них Product.importBatchId = этот id);
+// обновлённые существующие позиции в счётчик тоже входят, но не помечаются —
+// откат (rollbackBatch) удаляет только добавленное, не трогает обновлённое.
+model ImportBatch {
+  id           String    @id @default(cuid())
+  storeId      String
+  store        Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User      @relation(fields: [userId], references: [id])
+  fileName     String
+  rowsTotal    Int
+  rowsImported Int       @default(0)
+  rowsSkipped  Int       @default(0)
+  aiChecked    Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  rolledBackAt DateTime?
+
+  @@index([storeId, createdAt])
 }
 
 model StockMovement {
@@ -388,4 +418,92 @@ model PlatformBriefing {
   content     String
   model       String
   generatedAt DateTime @default(now())
+}
+
+// ── Камеры ───────────────────────────────────────────────────────────────
+// Регистратор в магазине сидит за NAT провайдера, порты наружу не открываем
+// (см. отчёт по фиче) — StoreAgent представляет мини-ПК/Raspberry Pi на
+// месте, который сам инициирует исходящее соединение к нашему серверу и
+// локально гоняет go2rtc против регистратора. CameraDevice.connection=DIRECT
+// (клиент с белым IP, сам открыл порт) вообще не использует агента —
+// agentId в этом случае пуст, проверяется в сервисном слое, не в БД.
+enum CameraVendor {
+  DAHUA
+  HIKVISION
+  GENERIC
+}
+
+enum CameraConnectionMode {
+  AGENT
+  DIRECT
+}
+
+enum AgentStatus {
+  PENDING
+  ONLINE
+  OFFLINE
+}
+
+// tokenHash = sha256(токена) — та же схема, что Session/SuperAdminSession:
+// сырой токен показывается в интерфейсе один раз при выпуске и живёт только
+// в install-команде для агента, в БД остаётся только хеш.
+model StoreAgent {
+  id           String         @id @default(cuid())
+  storeId      String
+  store        Store          @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name         String
+  tokenHash    String         @unique
+  status       AgentStatus    @default(PENDING)
+  lastSeenAt   DateTime?
+  lastIp       String?
+  agentVersion String?
+  createdAt    DateTime       @default(now())
+  devices      CameraDevice[]
+
+  @@index([storeId])
+}
+
+model CameraDevice {
+  id         String               @id @default(cuid())
+  storeId    String
+  store      Store                @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name       String
+  vendor     CameraVendor
+  connection CameraConnectionMode @default(AGENT)
+  agentId    String?
+  agent      StoreAgent?          @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  host       String
+  rtspPort   Int                  @default(554)
+  httpPort   Int                  @default(80)
+  username   String
+  // Шифруется server/cameraCrypto.ts (AES-256-GCM) — чужое оборудование в
+  // чужом магазине, пароль в открытом виде в БД лежать не должен.
+  passwordEnc    String
+  channelCount   Int              @default(1)
+  // Escape hatch для GENERIC/нестандартных прошивок — прямые URL руками,
+  // когда шаблон по вендору не подходит (lib/cameraVendors.ts).
+  urlOverride    Json?
+  // Дрейф часов регистратора — считается по требованию (при сохранении +
+  // кнопка «проверить снова»), не по таймеру, см. отчёт по фиче.
+  clockOffsetSec Int?
+  clockCheckedAt DateTime?
+  createdAt      DateTime         @default(now())
+  cameras        Camera[]
+
+  @@index([storeId])
+  @@index([agentId])
+}
+
+model Camera {
+  id        String       @id @default(cuid())
+  deviceId  String
+  device    CameraDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  channel   Int
+  name      String
+  enabled   Boolean      @default(true)
+  sortOrder Int          @default(0)
+  createdAt DateTime     @default(now())
+
+  @@unique([deviceId, channel])
+  @@index([deviceId])
 }

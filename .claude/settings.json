@@ -18,7 +18,11 @@
       "Bash(psql -U a1111 -h localhost -d redstore -c 'select id, email, name, \"createdAt\" from \"SuperAdmin\";')",
       "Bash(curl -s -o /tmp/rootlogin.html -w \"%{http_code}\\\\n\" https://storeos.online/root/login)",
       "Bash(grep -o '\"\\\\$ACTION_[^\"]*\"' /tmp/rootlogin.html)",
-      "Bash(grep -o 'action-[a-f0-9]\\\\{40,\\\\}' /tmp/rootlogin.html)"
+      "Bash(grep -o 'action-[a-f0-9]\\\\{40,\\\\}' /tmp/rootlogin.html)",
+      "Bash(python3 -c ' *)",
+      "Bash(npm audit *)",
+      "Bash(npm uninstall *)",
+      "Bash(openssl rand *)"
     ]
   }
 }

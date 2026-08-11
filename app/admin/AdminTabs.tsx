@@ -6,6 +6,8 @@ export function AdminTabs() {
   const path = usePathname();
   const tabs = [
     { href: "/admin", label: "Товары" },
+    { href: "/admin/import", label: "Импорт" },
+    { href: "/admin/cameras", label: "Камеры" },
     { href: "/admin/assistant", label: "Приёмка ИИ" },
     { href: "/admin/inventory", label: "Инвентаризация" },
     { href: "/admin/receipts", label: "Чеки за день" },

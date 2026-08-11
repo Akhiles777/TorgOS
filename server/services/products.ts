@@ -68,6 +68,14 @@ export type ProductInput = {
   expiry?: string | null;
   stock?: number;
   showInPos?: boolean;
+  // Проставляется только импортом (app/admin/import/) — см. комментарий у
+  // Product.importBatchId в schema.prisma про то, почему это не трогает update.
+  importBatchId?: string | null;
+  // Только для импорта: невалидный по контрольной цифре штрихкод — это
+  // предупреждение, а не причина не импортировать позицию (см. отчёт по
+  // фиче). Ручное добавление товара (ProductModal) этот флаг не передаёт —
+  // там кассир/админ вводит штрихкод осознанно, и мусор блокируем как раньше.
+  allowInvalidBarcode?: boolean;
 };
 
 export class ProductError extends Error {}
@@ -91,7 +99,9 @@ export async function createProduct(db: TenantDb, storeId: string, input: Produc
   if (input.price < 0 || input.costPrice < 0) throw new ProductError("Цена не может быть отрицательной");
 
   let barcode = input.barcode?.trim() || null;
-  if (barcode && !isValidBarcode(barcode)) throw new ProductError("Штрихкод должен быть валидным EAN-13 (13 цифр) или EAN-8 (8 цифр)");
+  if (barcode && !isValidBarcode(barcode) && !input.allowInvalidBarcode) {
+    throw new ProductError("Штрихкод должен быть валидным EAN-13 (13 цифр) или EAN-8 (8 цифр)");
+  }
   // Развесной без штрихкода — генерируем внутренний EAN-13 (для печати ярлыка)
   if (!barcode && input.unit === "KG") barcode = await nextInternalBarcode(storeId);
   if (barcode) {
@@ -104,7 +114,7 @@ export async function createProduct(db: TenantDb, storeId: string, input: Produc
       storeId, name: input.name.trim(), price: new Prisma.Decimal(input.price.toFixed(2)),
       costPrice: new Prisma.Decimal(input.costPrice.toFixed(2)), unit: input.unit, category: input.category.trim() || "Прочее",
       barcode, expiry: input.expiry ? new Date(input.expiry) : null, stock: new Prisma.Decimal((input.stock ?? 0).toFixed(3)),
-      showInPos: input.showInPos ?? false,
+      showInPos: input.showInPos ?? false, importBatchId: input.importBatchId ?? null,
     },
   });
   return row(created);

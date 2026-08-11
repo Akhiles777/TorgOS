@@ -1,0 +1,18 @@
+[Unit]
+Description=ТоргОС — агент точки (камеры)
+After=network-online.target torgos-go2rtc.service
+Wants=network-online.target
+Requires=torgos-go2rtc.service
+
+[Service]
+Type=simple
+Environment=TORGOS_AGENT_CONFIG={{INSTALL_DIR}}/config.json
+Environment=GO2RTC_API=http://127.0.0.1:1984
+ExecStart=/usr/local/bin/node {{INSTALL_DIR}}/agent.mjs
+WorkingDirectory={{INSTALL_DIR}}
+Restart=always
+RestartSec=3
+User=root
+
+[Install]
+WantedBy=multi-user.target

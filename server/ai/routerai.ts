@@ -14,7 +14,7 @@ export class AiUnavailableError extends Error {}
 
 type ChatMessage = { role: "system" | "user"; content: string };
 
-export async function chatComplete(messages: ChatMessage[]): Promise<string> {
+export async function chatComplete(messages: ChatMessage[], opts: { maxTokens?: number } = {}): Promise<string> {
   const apiKey = process.env.ROUTERAI_API_KEY;
   if (!apiKey) throw new AiUnavailableError("ROUTERAI_API_KEY не задан");
   const model = process.env.ROUTERAI_MODEL || "anthropic/claude-sonnet-5";
@@ -25,7 +25,7 @@ export async function chatComplete(messages: ChatMessage[]): Promise<string> {
     const res = await fetch(ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({ model, messages, temperature: 0.4, max_tokens: 400 }),
+      body: JSON.stringify({ model, messages, temperature: 0.4, max_tokens: opts.maxTokens ?? 400 }),
       signal: controller.signal,
     });
     if (!res.ok) {

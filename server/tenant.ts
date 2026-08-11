@@ -51,10 +51,16 @@ const TENANT_WHERE: Record<Prisma.ModelName, (orgId: string) => Where> = {
   // Анонимные посетители лендинга — тоже вне организаций, тот же принцип.
   SiteEvent: superAdminOnly,
   PlatformBriefing: superAdminOnly,
+  ImportBatch: (orgId) => ({ store: { organizationId: orgId } }),
+  StoreAgent: (orgId) => ({ store: { organizationId: orgId } }),
+  CameraDevice: (orgId) => ({ store: { organizationId: orgId } }),
+  Camera: (orgId) => ({ device: { store: { organizationId: orgId } } }),
 };
 
 // Скалярные внешние ключи, которые могут встретиться в data при create/update.
-type FkTarget = "store" | "product" | "sale" | "user" | "employee" | "inventorySession";
+type FkTarget =
+  | "store" | "product" | "sale" | "user" | "employee" | "inventorySession" | "importBatch"
+  | "storeAgent" | "cameraDevice";
 const FK_TARGETS: Record<string, FkTarget> = {
   storeId: "store",
   productId: "product",
@@ -63,6 +69,9 @@ const FK_TARGETS: Record<string, FkTarget> = {
   cashierId: "user",
   employeeId: "employee",
   sessionId: "inventorySession",
+  importBatchId: "importBatch",
+  agentId: "storeAgent",
+  deviceId: "cameraDevice",
 };
 
 function collectFks(data: unknown, acc: Record<FkTarget, Set<string>>) {
@@ -83,6 +92,7 @@ async function assertFksBelongToOrg(orgId: string, data: unknown, organizationId
   const acc = {
     store: new Set<string>(), product: new Set<string>(), sale: new Set<string>(),
     user: new Set<string>(), employee: new Set<string>(), inventorySession: new Set<string>(),
+    importBatch: new Set<string>(), storeAgent: new Set<string>(), cameraDevice: new Set<string>(),
   };
   collectFks(data, acc);
   const checks: Promise<void>[] = [];
@@ -94,6 +104,9 @@ async function assertFksBelongToOrg(orgId: string, data: unknown, organizationId
   if (acc.user.size) check(prisma.user.count({ where: { id: { in: [...acc.user] }, organizationId: orgId } }), acc.user.size);
   if (acc.employee.size) check(prisma.employee.count({ where: { id: { in: [...acc.employee] }, store: { organizationId: orgId } } }), acc.employee.size);
   if (acc.inventorySession.size) check(prisma.inventorySession.count({ where: { id: { in: [...acc.inventorySession] }, store: { organizationId: orgId } } }), acc.inventorySession.size);
+  if (acc.importBatch.size) check(prisma.importBatch.count({ where: { id: { in: [...acc.importBatch] }, store: { organizationId: orgId } } }), acc.importBatch.size);
+  if (acc.storeAgent.size) check(prisma.storeAgent.count({ where: { id: { in: [...acc.storeAgent] }, store: { organizationId: orgId } } }), acc.storeAgent.size);
+  if (acc.cameraDevice.size) check(prisma.cameraDevice.count({ where: { id: { in: [...acc.cameraDevice] }, store: { organizationId: orgId } } }), acc.cameraDevice.size);
   await Promise.all(checks);
 }
 

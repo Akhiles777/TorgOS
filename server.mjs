@@ -5,6 +5,7 @@
 import { createServer } from "node:http";
 import { parse } from "node:url";
 import { createHash } from "node:crypto";
+import { Readable } from "node:stream";
 import next from "next";
 import { WebSocketServer } from "ws";
 import { PrismaClient } from "@prisma/client";
@@ -40,6 +41,187 @@ function broadcast(storeId, updates, saleNumber) {
 // Мост к API-роутам Next: тот же процесс, общий globalThis.
 globalThis.__torgosBroadcast = broadcast;
 globalThis.__torgosBroadcastMsg = (storeId, message) => sendToRoom(storeId, message);
+
+// ── Туннель до агента точки ("Камеры") ──────────────────────────────────
+// Агент (мини-ПК/Raspberry Pi в магазине) сам открывает исходящее WS-соединение
+// сюда — сервер к нему подключиться не может (агент за NAT магазина, порты
+// наружу не открываем, см. отчёт по фиче). После регистрации по токену
+// агент — просто «глупый» релей: сервер шлёт ему готовый {url,method,headers}
+// (сам собирает URL с учётными данными, агент вообще не знает про вендоров и
+// не хранит паролей), агент делает HTTP-запрос к своему локальному go2rtc и
+// стримит ответ обратно кусками, не дожидаясь целиком (архивные файлы и
+// HLS-сегменты бывают большими, а Content-Length заранее не всегда известен).
+//
+// agentId -> { ws, storeId, nextReqId, pending: Map<reqId, handlers> }
+const agentConns = new Map();
+
+function agentSend(conn, obj) {
+  if (conn.ws.readyState === conn.ws.OPEN) conn.ws.send(JSON.stringify(obj));
+}
+
+// Вызывается из API-роутов Next через globalThis (тот же процесс, та же
+// схема моста, что у __torgosBroadcast) — шлёт запрос агенту и отдаёт
+// {status, headers, body: Readable} как только придёт заголовок ответа,
+// дальше тело льётся в этот Readable по мере поступления бинарных фреймов.
+function proxyToAgent(agentId, req) {
+  return new Promise((resolve, reject) => {
+    const conn = agentConns.get(agentId);
+    if (!conn) {
+      reject(Object.assign(new Error("Агент офлайн"), { code: "AGENT_OFFLINE" }));
+      return;
+    }
+    const id = conn.nextReqId++;
+    const timeoutMs = req.timeoutMs ?? 8000;
+    let headResolved = false;
+    let bodyStream = null;
+
+    const timer = setTimeout(() => {
+      const pending = conn.pending.get(id);
+      if (!pending) return;
+      conn.pending.delete(id);
+      if (!headResolved) {
+        reject(Object.assign(new Error("Таймаут ответа от агента"), { code: "AGENT_TIMEOUT" }));
+      } else {
+        bodyStream?.destroy(new Error("Таймаут тела ответа"));
+      }
+      agentSend(conn, { type: "req-abort", id });
+    }, timeoutMs);
+    timer.unref();
+
+    conn.pending.set(id, {
+      onHead(status, headers) {
+        headResolved = true;
+        clearTimeout(timer);
+        bodyStream = new Readable({ read() {} });
+        resolve({ status, headers, body: bodyStream });
+      },
+      onChunk(buf) {
+        bodyStream?.push(buf);
+      },
+      onEnd() {
+        bodyStream?.push(null);
+        conn.pending.delete(id);
+      },
+      onError(message) {
+        clearTimeout(timer);
+        if (!headResolved) reject(Object.assign(new Error(message), { code: "AGENT_ERROR" }));
+        else bodyStream?.destroy(new Error(message));
+        conn.pending.delete(id);
+      },
+    });
+
+    agentSend(conn, {
+      type: "req",
+      id,
+      url: req.url,
+      method: req.method || "GET",
+      headers: req.headers || {},
+      bodyBase64: req.body ? Buffer.from(req.body).toString("base64") : undefined,
+    });
+  });
+}
+
+globalThis.__torgosAgentProxy = proxyToAgent;
+globalThis.__torgosAgentOnline = (agentId) => agentConns.has(agentId);
+
+// Debounce записи lastSeenAt в БД — как sliding-renewal сессий в server/auth.ts,
+// не пишем на каждый heartbeat (раз в ~25с), а не чаще раза в ~60с.
+const HEARTBEAT_DB_WRITE_MS = 60_000;
+
+async function handleAgentConnection(ws, req) {
+  let conn = null;
+  let registered = false;
+
+  const registerTimer = setTimeout(() => {
+    if (!registered) ws.close(4001, "no register");
+  }, 10_000);
+
+  ws.on("message", async (data, isBinary) => {
+    if (isBinary) {
+      if (!conn || data.length < 4) return;
+      const id = data.readUInt32BE(0);
+      conn.pending.get(id)?.onChunk(data.subarray(4));
+      return;
+    }
+
+    let msg;
+    try {
+      msg = JSON.parse(data.toString());
+    } catch {
+      return;
+    }
+
+    if (!registered) {
+      if (msg.type !== "register" || typeof msg.token !== "string") return;
+      clearTimeout(registerTimer);
+      const tokenHash = sha256(msg.token);
+      const agent = await prisma.storeAgent.findUnique({ where: { tokenHash } }).catch(() => null);
+      if (!agent) {
+        ws.send(JSON.stringify({ type: "error", code: "invalid_token" }));
+        ws.close(4003, "invalid token");
+        return;
+      }
+      registered = true;
+      conn = { ws, agentId: agent.id, storeId: agent.storeId, nextReqId: 1, pending: new Map(), lastDbWrite: 0 };
+      agentConns.set(agent.id, conn);
+
+      const remoteIp = req.socket.remoteAddress || null;
+      await prisma.storeAgent.update({
+        where: { id: agent.id },
+        data: { status: "ONLINE", lastSeenAt: new Date(), lastIp: remoteIp, agentVersion: msg.agentVersion || null },
+      }).catch((e) => console.error("[agent-tunnel] не удалось обновить статус агента:", e));
+      sendToRoom(agent.storeId, { type: "agent-status", agentId: agent.id, status: "ONLINE" });
+
+      // Конфиг потоков собирается в TS-коде (расшифровка пароля + шаблоны по
+      // вендору) — server.mjs идёт напрямую через node без TS-трансформации
+      // (тот же принцип, что уже применён к sha256/cookie-парсингу выше),
+      // поэтому запрашиваем его у самого себя через внутренний API-роут,
+      // а не дублируем шифрование и парсинг вендоров плейн JS-ом здесь.
+      let config = { streams: [] };
+      try {
+        const res = await fetch(`http://127.0.0.1:${port}/api/internal/agent-config?agentId=${agent.id}`, {
+          headers: { "x-internal-secret": process.env.AUTH_SECRET || "" },
+        });
+        if (res.ok) config = await res.json();
+      } catch (e) {
+        console.error("[agent-tunnel] не удалось собрать конфиг агента:", e);
+      }
+
+      ws.send(JSON.stringify({ type: "registered", agentId: agent.id, config }));
+      return;
+    }
+
+    if (!conn) return;
+    switch (msg.type) {
+      case "heartbeat": {
+        const now = Date.now();
+        if (now - conn.lastDbWrite > HEARTBEAT_DB_WRITE_MS) {
+          conn.lastDbWrite = now;
+          await prisma.storeAgent.update({ where: { id: conn.agentId }, data: { lastSeenAt: new Date() } }).catch(() => {});
+        }
+        break;
+      }
+      case "res-head":
+        conn.pending.get(msg.id)?.onHead(msg.status, msg.headers || {});
+        break;
+      case "res-end":
+        conn.pending.get(msg.id)?.onEnd();
+        break;
+      case "res-error":
+        conn.pending.get(msg.id)?.onError(msg.message || "Ошибка агента");
+        break;
+    }
+  });
+
+  ws.on("close", async () => {
+    clearTimeout(registerTimer);
+    if (!conn) return;
+    agentConns.delete(conn.agentId);
+    for (const pending of conn.pending.values()) pending.onError?.("Агент отключился");
+    await prisma.storeAgent.update({ where: { id: conn.agentId }, data: { status: "OFFLINE" } }).catch(() => {});
+    sendToRoom(conn.storeId, { type: "agent-status", agentId: conn.agentId, status: "OFFLINE" });
+  });
+}
 
 // Биллинг-каркас: раз при старте + затем каждые 6 часов (не раз в сутки —
 // см. дизайн-план Фазы 2, решение №2: при частых редеплоях таймер сбрасывается,
@@ -114,6 +296,14 @@ app.prepare().then(() => {
 
   server.on("upgrade", async (req, socket, head) => {
     const { pathname } = parse(req.url);
+
+    if (pathname === "/agent-tunnel") {
+      wss.handleUpgrade(req, socket, head, (ws) => {
+        handleAgentConnection(ws, req);
+      });
+      return;
+    }
+
     if (pathname !== "/ws") {
       socket.destroy();
       return;
@@ -166,6 +356,7 @@ app.prepare().then(() => {
     console.log(`\n${signal}: останавливаюсь аккуратно…`);
     clearInterval(billingTimer);
     for (const room of rooms.values()) for (const ws of room) ws.close(1001, "server shutdown");
+    for (const conn of agentConns.values()) conn.ws.close(1001, "server shutdown");
     wss.close();
     server.close(async () => {
       await prisma.$disconnect().catch(() => {});
