@@ -7,6 +7,7 @@ import { Prisma } from "@prisma/client";
 import type { TenantDb } from "../tenant";
 import type { ParsedProductRow } from "@/lib/importParser";
 import { createProduct, ProductError } from "./products";
+import { recalcDependents } from "./horeca/costing";
 
 export type DedupMode = "skip" | "updatePrice" | "updateAll";
 
@@ -37,6 +38,10 @@ export async function commitChunk(
   let imported = 0;
   let updated = 0;
   let skipped = 0;
+  // Себестоимость обновлённых (не новых) товаров могла поменяться — собираем
+  // id и пересчитываем зависимые блюда/полуфабрикаты одним пакетом в конце,
+  // а не по одному в цикле. Для розницы — пустой список, без эффекта.
+  const touchedIds: string[] = [];
 
   for (const parsed of rows) {
     if (parsed.skip) {
@@ -56,6 +61,7 @@ export async function commitChunk(
             where: { id: existing.id },
             data: { price: new Prisma.Decimal(parsed.price.toFixed(2)), costPrice: new Prisma.Decimal(parsed.costPrice.toFixed(2)) },
           });
+          touchedIds.push(existing.id);
           updated++;
           continue;
         }
@@ -68,6 +74,7 @@ export async function commitChunk(
             unit: parsed.unit, category: parsed.category, expiry: parsed.expiry ? new Date(parsed.expiry) : null,
           },
         });
+        touchedIds.push(existing.id);
         updated++;
         continue;
       }
@@ -90,6 +97,7 @@ export async function commitChunk(
     where: { id: batchId },
     data: { rowsImported: { increment: imported + updated }, rowsSkipped: { increment: skipped } },
   });
+  if (touchedIds.length) await recalcDependents(db, touchedIds);
 
   return { imported, updated, skipped };
 }

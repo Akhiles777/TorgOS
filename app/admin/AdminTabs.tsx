@@ -1,36 +1,36 @@
-"use client";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+// Серверная обёртка: список вкладок зависит от типа организации (HORECA
+// получает «Меню»/«Рецепты»/«Производство» — розница их не видит, RETAIL-набор
+// ниже не изменился ни на символ). Сама разметка — в клиентском AdminTabsNav.
+import { getCurrentUser } from "@/server/auth";
+import { tenantDb } from "@/server/tenant";
+import { getOrgType } from "@/server/org";
+import { AdminTabsNav, type AdminTab } from "./AdminTabsNav";
 
-export function AdminTabs() {
-  const path = usePathname();
-  const tabs = [
-    { href: "/admin", label: "Товары" },
-    { href: "/admin/assistant", label: "Приёмка ИИ" },
-    { href: "/admin/inventory", label: "Инвентаризация" },
-    { href: "/admin/receipts", label: "Чеки за день" },
-    { href: "/admin/debts", label: "Долги" },
-    { href: "/admin/staff", label: "Сотрудники" },
-    // Реже используемые разделы — намеренно последними в списке вкладок.
-    { href: "/admin/import", label: "Импорт" },
-    { href: "/admin/cameras", label: "Камеры" },
-  ];
-  return (
-    <div className="flex gap-1 border-b border-line mb-5 -mt-1 overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0">
-      {tabs.map((t) => {
-        const active = t.href === "/admin" ? path === "/admin" : path.startsWith(t.href);
-        return (
-          <Link
-            key={t.href}
-            href={t.href}
-            className={`px-3 pb-2.5 pt-1.5 sm:pb-2 sm:pt-1 text-sm font-medium border-b-2 -mb-px whitespace-nowrap ${
-              active ? "border-stamp text-ink" : "border-transparent text-ink-soft hover:text-ink"
-            }`}
-          >
-            {t.label}
-          </Link>
-        );
-      })}
-    </div>
-  );
+const RETAIL_TABS: AdminTab[] = [
+  { href: "/admin", label: "Товары" },
+  { href: "/admin/assistant", label: "Приёмка ИИ" },
+  { href: "/admin/inventory", label: "Инвентаризация" },
+  { href: "/admin/receipts", label: "Чеки за день" },
+  { href: "/admin/debts", label: "Долги" },
+  { href: "/admin/staff", label: "Сотрудники" },
+  // Реже используемые разделы — намеренно последними в списке вкладок.
+  { href: "/admin/import", label: "Импорт" },
+  { href: "/admin/cameras", label: "Камеры" },
+];
+
+// Вставляются сразу после «Товаров» (склад ингредиентов) — «Производство»
+// добавится сюда же по мере готовности соответствующего экрана.
+const HORECA_EXTRA_TABS: AdminTab[] = [
+  { href: "/admin/menu", label: "Меню" },
+  { href: "/admin/recipes", label: "Рецепты" },
+];
+
+export async function AdminTabs() {
+  const user = await getCurrentUser();
+  const tabs = [...RETAIL_TABS];
+  if (user) {
+    const orgType = await getOrgType(tenantDb(user.organizationId), user.organizationId);
+    if (orgType === "HORECA") tabs.splice(1, 0, ...HORECA_EXTRA_TABS);
+  }
+  return <AdminTabsNav tabs={tabs} />;
 }

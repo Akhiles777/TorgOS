@@ -3,6 +3,7 @@ import { Prisma, type PaymentMethod, type Unit } from "@prisma/client";
 import type { TenantDb } from "../tenant";
 import { prisma } from "../db";
 import { toNum } from "@/lib/format";
+import { createSaleRecord, resolveCash } from "./sale";
 
 export type CartLinePayload = { productId: string; quantity: number };
 export type CommitPayload = {
@@ -97,26 +98,18 @@ export async function commitSale(
 
     const isDebt = !!payload.isDebt;
     const paymentMethod = payload.paymentMethod;
-    let cashGiven: Prisma.Decimal | null = null;
-    let changeGiven: Prisma.Decimal | null = null;
     // Наличные: «получено» НЕ обязательно. Если не введено (0/пусто) — считаем
     // оплату «под расчёт» (сдачи нет). Если введено — проверяем и считаем сдачу.
-    if (paymentMethod === "CASH" && !isDebt && payload.cashGiven != null && payload.cashGiven > 0) {
-      const given = new Prisma.Decimal(payload.cashGiven.toFixed(2));
-      if (given.lessThan(total)) throw new PosError("Получено меньше суммы чека");
-      cashGiven = given;
-      changeGiven = given.minus(total);
-    }
+    const cash = resolveCash(total, paymentMethod, isDebt, payload.cashGiven);
+    if ("error" in cash) throw new PosError(cash.error);
+    const { cashGiven, changeGiven } = cash;
 
-    const sale = await tx.sale.create({
-      data: {
-        storeId, cashierId, employeeId, total, paymentMethod, cashGiven, changeGiven,
-        isDebt,
-        debtorName: isDebt ? (payload.debtorName?.trim() || null) : null,
-        debtorContact: isDebt ? (payload.debtorContact?.trim() || null) : null,
-        items: { create: items },
-      },
-      select: { id: true, number: true },
+    const sale = await createSaleRecord(tx, {
+      storeId, cashierId, employeeId, total, paymentMethod, cashGiven, changeGiven,
+      isDebt,
+      debtorName: isDebt ? (payload.debtorName?.trim() || null) : null,
+      debtorContact: isDebt ? (payload.debtorContact?.trim() || null) : null,
+      items,
     });
 
     // Списание остатков + движения

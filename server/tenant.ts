@@ -167,10 +167,23 @@ export function tenantDb(orgId: string) {
             case "deleteMany":
               return query({ ...args, where: withGuard(args?.where) });
 
+            // findUnique/findUniqueOrThrow принимают where в формате «уникальный
+            // идентификатор» — для составных ключей (RecipeLine, MenuItemModifierGroup,
+            // Camera и т.п., @@unique([a,b])) это объект вида {a_b: {a,b}}, который
+            // НЕЛЬЗЯ передать в findFirst (он ждёт обычный WhereInput-фильтр, не
+            // WhereUniqueInput) — Prisma бросит PrismaClientValidationError. Поэтому
+            // сначала достаём id через нативный delegate.findUnique (единственный метод,
+            // который умеет составные ключи), потом отдельно проверяем организацию по id.
             case "findUnique":
-              return delegate.findFirst({ ...args, where: withGuard(args?.where) });
-            case "findUniqueOrThrow":
-              return delegate.findFirstOrThrow({ ...args, where: withGuard(args?.where) });
+            case "findUniqueOrThrow": {
+              const exists = await delegate.findUnique({ where: args?.where, select: { id: true } });
+              const inOrg = exists ? await delegate.findFirst({ where: withGuard({ id: exists.id }), select: { id: true } }) : null;
+              if (!inOrg) {
+                if (operation === "findUniqueOrThrow") throw new TenantError("Запись не найдена в вашей организации");
+                return null;
+              }
+              return query(args);
+            }
 
             case "update":
             case "delete": {
@@ -182,11 +195,11 @@ export function tenantDb(orgId: string) {
 
             case "upsert": {
               await assertFksBelongToOrg(orgId, [args?.create, args?.update], args?.create?.organizationId);
-              const found = await delegate.findFirst({ where: withGuard(args?.where), select: { id: true } });
-              if (!found) {
-                // записи нет в нашей организации — но она может существовать в чужой
-                const anywhere = await delegate.findFirst({ where: args?.where, select: { id: true } });
-                if (anywhere) throw new TenantError();
+              // См. комментарий у findUnique выше — то же ограничение на составные ключи.
+              const exists = await delegate.findUnique({ where: args?.where, select: { id: true } });
+              if (exists) {
+                const inOrg = await delegate.findFirst({ where: withGuard({ id: exists.id }), select: { id: true } });
+                if (!inOrg) throw new TenantError();
               }
               return query(args);
             }

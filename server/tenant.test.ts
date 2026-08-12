@@ -38,6 +38,10 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  // RecipeLine.product — RESTRICT (защита истории рецептов, см. отчёт по
+  // шагу 3 и известную проблему с organization.delete() в rootAdmin.ts) —
+  // каскад Organization→Store→Product упадёт, пока не удалены строки рецепта вручную.
+  await prisma.recipeLine.deleteMany({ where: { product: { storeId: { in: [storeB] } } } });
   await prisma.organization.deleteMany({ where: { id: { in: [orgA, orgB] } } });
   await prisma.$disconnect();
 });
@@ -128,6 +132,34 @@ describe("tenant-изоляция", () => {
         },
       }),
     ).rejects.toThrow(TenantError);
+  });
+
+  it("findUnique/upsert по СОСТАВНОМУ уникальному ключу (RecipeLine.menuItemId_productId) корректно скоупится по организации", async () => {
+    // Регрессия: tenantDb раньше падал PrismaClientValidationError на любом
+    // findUnique/upsert с составным ключом (первый такой ключ в проекте —
+    // RecipeLine, добавлен для HORECA) — см. отчёт по шагу 3.
+    const line = await prisma.recipeLine.create({ data: { menuItemId: menuItemB, productId: productB, quantity: 1 } });
+    const dbA = tenantDb(orgA);
+    const dbB = tenantDb(orgB);
+    const uniqueWhere = { menuItemId_productId: { menuItemId: menuItemB, productId: productB } } as const;
+
+    // Чужая организация — не крашится, просто не находит.
+    expect(await dbA.recipeLine.findUnique({ where: uniqueWhere })).toBeNull();
+    // Своя организация — находит как обычно.
+    expect((await dbB.recipeLine.findUnique({ where: uniqueWhere }))?.id).toBe(line.id);
+
+    // upsert по составному ключу от чужой организации не должен ни создать
+    // дубль, ни обновить чужую строку — org A не владеет ни menuItemB, ни productB,
+    // поэтому FK-проверка (assertFksBelongToOrg) должна отклонить ещё до дела до upsert.
+    await expect(
+      dbA.recipeLine.upsert({ where: uniqueWhere, create: { menuItemId: menuItemB, productId: productB, quantity: 5 }, update: { quantity: 5 } }),
+    ).rejects.toThrow(TenantError);
+
+    // upsert от своей организации по существующему составному ключу — обновляет, не дублирует.
+    await dbB.recipeLine.upsert({ where: uniqueWhere, create: { menuItemId: menuItemB, productId: productB, quantity: 9 }, update: { quantity: 2 } });
+    const updated = await prisma.recipeLine.findUnique({ where: uniqueWhere });
+    expect(Number(updated!.quantity)).toBe(2);
+    expect(await prisma.recipeLine.count({ where: { menuItemId: menuItemB, productId: productB } })).toBe(1);
   });
 
   it("OrderItem со снимком модификатора, ссылающимся на чужой addProductId, падает TenantError", async () => {

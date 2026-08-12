@@ -4,6 +4,7 @@ import type { TenantDb } from "../tenant";
 import { prisma } from "../db";
 import { toNum } from "@/lib/format";
 import { internalBarcode, isValidBarcode } from "@/lib/ean13";
+import { recalcDependents } from "./horeca/costing";
 
 export type ProductRow = {
   id: string;
@@ -18,17 +19,21 @@ export type ProductRow = {
   isActive: boolean;
   showInPos: boolean;
   marginPct: number;
+  // Полуфабрикат общепита (см. /admin/recipes) — для розницы всегда false.
+  isSemiFinished: boolean;
 };
 
 function row(p: {
   id: string; barcode: string | null; name: string; price: Prisma.Decimal; costPrice: Prisma.Decimal;
   unit: Unit; category: string; stock: Prisma.Decimal; expiry: Date | null; isActive: boolean; showInPos: boolean;
+  isSemiFinished?: boolean;
 }): ProductRow {
   const price = toNum(p.price), cost = toNum(p.costPrice);
   return {
     id: p.id, barcode: p.barcode, name: p.name, price, costPrice: cost, unit: p.unit,
     category: p.category, stock: toNum(p.stock), expiry: p.expiry ? p.expiry.toISOString().slice(0, 10) : null,
     isActive: p.isActive, showInPos: p.showInPos, marginPct: price > 0 ? Math.round(((price - cost) / price) * 100) : 0,
+    isSemiFinished: p.isSemiFinished ?? false,
   };
 }
 
@@ -133,6 +138,10 @@ export async function updateProduct(db: TenantDb, id: string, input: ProductInpu
       showInPos: input.showInPos ?? false,
     },
   });
+  // Себестоимость товара могла поменяться — пересчитываем блюда/полуфабрикаты,
+  // где он используется как ингредиент. Для розницы это запрос по пустым
+  // таблицам (общепитовых моделей у неё нет) — без побочных эффектов.
+  await recalcDependents(db, [id]);
   return row(updated);
 }
 
