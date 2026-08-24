@@ -8,18 +8,17 @@ export function Hero() {
       <div className="max-w-[1200px] mx-auto px-6 md:px-10 grid lg:grid-cols-[55fr_45fr] gap-10 lg:gap-16 items-center">
         <div>
           <h1 className="font-landing-display font-extrabold text-land-h1 tracking-[-0.02em] text-land-ink max-w-[15ch]">
-            Знаете, что реально есть на полке — не открывая тетрадь
+            Знаете, на чём зарабатываете — ещё до закрытия смены
           </h1>
           <p className="font-landing-text text-land-body text-land-muted mt-6 max-w-[46ch]">
-            Касса и учёт для магазина или кафе. Пробиваете чек обычным сканером или камерой телефона — а остатки,
-            недостачи и что пора докупить видно сами, без вечерней сверки в тетради.
+            ТоргОС — простой учёт для небольшого магазина или кафе: остатки, рецепты и себестоимость каждой позиции в одном интерфейсе, без бухгалтера и без склада знаний.
           </p>
           <div className="mt-8 flex flex-col items-start gap-3">
             <LandingButton href="/register" size="lg" trackId="hero">
               Начать бесплатно
             </LandingButton>
             <span className="font-landing-text text-land-small text-land-muted">
-              14 дней бесплатно · Карта не нужна · Работает с вашим сканером и телефоном
+              14 дней бесплатно · Карта не нужна
             </span>
           </div>
         </div>

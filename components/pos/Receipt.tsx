@@ -11,6 +11,8 @@ export function Receipt({
   onInc,
   onDec,
   onRemove,
+  title = "ТоргОС · Гастроном",
+  emptyStateHint = "Отсканируйте товар или выберите на плитке",
 }: {
   lines: CartLine[];
   total: number;
@@ -18,12 +20,14 @@ export function Receipt({
   onInc: (key: string) => void;
   onDec: (key: string) => void;
   onRemove: (key: string) => void;
+  title?: string;
+  emptyStateHint?: string;
 }) {
   return (
     <div className="flex flex-col h-full font-app-text">
       <div className="px-4 pt-4 pb-2 border-b border-dashed border-line">
         <div className="flex items-baseline justify-between font-app-mono text-ink-soft text-sm">
-          <span>ТоргОС · Гастроном</span>
+          <span>{title}</span>
           <span>{new Date().toLocaleDateString("ru-RU")}</span>
         </div>
         <div className="font-app-mono text-xs text-ink-soft mt-1 tracking-wide">— — — — Ч Е К — — — —</div>
@@ -33,7 +37,7 @@ export function Receipt({
         {lines.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-ink-soft px-6 text-center gap-2">
             <span className="font-app-mono text-5xl opacity-30">↯</span>
-            <p className="text-base">Отсканируйте товар или выберите на плитке</p>
+            <p className="text-base">{emptyStateHint}</p>
           </div>
         ) : (
           <ul className="py-2">

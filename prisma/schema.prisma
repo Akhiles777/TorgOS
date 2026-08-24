@@ -449,6 +449,29 @@ model SiteEvent {
   @@index([path, createdAt])
 }
 
+// Заявка в лист ожидания общепита — платформенная сущность, не организация.
+model Lead {
+  id            String   @id @default(cuid())
+  name          String
+  contact       String
+  contactType   String
+  venueType     String
+  city          String
+  pointsCount   String
+  currentSystem String
+  painPoint     String?
+  readyToCall   Boolean  @default(false)
+  source        String?
+  createdAt     DateTime @default(now())
+  contactedAt   DateTime?
+  note          String?
+
+  @@index([createdAt])
+  @@index([venueType])
+  @@index([city])
+  @@index([readyToCall])
+}
+
 // Кеш ИИ-сводки для супер-админа — платформенный аналог AiBriefing, но без
 // ключа по организации (это про весь SaaS сразу), поэтому singleton-запись
 // с фиксированным id вместо @unique на внешний ключ.

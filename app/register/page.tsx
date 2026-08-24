@@ -17,7 +17,7 @@ export default async function RegisterPage() {
       <div className="w-[min(94vw,480px)]">
         <div className="text-center mb-6">
           <div className="font-app-display text-3xl font-medium tracking-tight">ТоргОС</div>
-          <p className="text-ink-soft text-sm mt-1">Заведём ваш магазин за минуту</p>
+          <p className="text-ink-soft text-sm mt-1">Заведём вашу точку за минуту</p>
         </div>
         <div className="bg-paper-2 border border-line rounded-tag p-6 receipt-torn">
           <RegisterForm />

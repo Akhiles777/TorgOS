@@ -1,5 +1,26 @@
 @import "tailwindcss";
 
+@layer components {
+  .field-label { display: block; margin-bottom: 0.35rem; font-family: var(--font-landing-text); font-size: 0.8rem; color: var(--color-land-muted); }
+  .field { width: 100%; min-height: 2.75rem; border: 1px solid var(--color-land-line); background: var(--color-land-paper); padding: 0.55rem 0.7rem; font-family: var(--font-landing-text); font-size: 0.9rem; color: var(--color-land-ink); }
+  .field:focus { outline: 2px solid var(--color-land-signal); outline-offset: 1px; }
+
+  /* Юридические страницы (/legal/*) — обычная читаемая типографика, без
+     карточек/анимаций лендинга: это документ, который распечатывают и читают
+     подряд, а не маркетинговая страница. */
+  .legal-prose { font-family: var(--font-landing-text); color: var(--color-land-ink); font-size: 1rem; line-height: 1.7; }
+  .legal-prose h2 { font-family: var(--font-landing-display); font-weight: 700; font-size: 1.25rem; margin-top: 2.25rem; margin-bottom: 0.75rem; letter-spacing: -0.01em; }
+  .legal-prose h2:first-child { margin-top: 0; }
+  .legal-prose p { margin-top: 0.9rem; }
+  .legal-prose ol, .legal-prose ul { margin-top: 0.9rem; padding-left: 1.4rem; }
+  .legal-prose li { margin-top: 0.4rem; }
+  .legal-prose ol { list-style: decimal; }
+  .legal-prose ul { list-style: disc; }
+  .legal-prose strong { font-weight: 600; }
+  .legal-prose mark { background: color-mix(in srgb, var(--color-land-signal) 15%, transparent); color: var(--color-land-ink); padding: 0.05em 0.3em; border-radius: 3px; font-weight: 500; }
+  .legal-prose .legal-note { margin-top: 2.5rem; padding: 1rem 1.25rem; border: 1px solid var(--color-land-line); background: var(--color-land-surface); font-size: 0.9rem; color: var(--color-land-muted); }
+}
+
 /* ТоргОС — визуальная система: крафт-бумага + типографская краска чековой ленты.
    Все цвета и шрифты живут ТОЛЬКО здесь. Никаких одноразовых hex в компонентах. */
 @theme {

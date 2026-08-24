@@ -7,6 +7,7 @@ import { hash } from "bcryptjs";
 import type { OrgType } from "@prisma/client";
 import { emailSender } from "../email/sender";
 import { demoProducts } from "@/lib/demoProducts";
+import { seedHorecaDemo } from "./horeca/demoSeed";
 
 export type RegisterInput = {
   orgName: string;
@@ -77,21 +78,28 @@ export async function registerOrganization(input: RegisterInput) {
     });
 
     if (input.demoProducts) {
-      const products = demoProducts();
-      await tx.product.createMany({
-        data: products.map((p) => ({
-          storeId: store.id,
-          name: p.name,
-          category: p.category,
-          price: p.price,
-          costPrice: p.costPrice,
-          unit: p.unit,
-          stock: p.stock,
-          barcode: p.barcode,
-          showInPos: p.showInPos,
-          isActive: true,
-        })),
-      });
+      // RETAIL остаётся достижимым только для уже существующих организаций —
+      // сама регистрация теперь только HORECA (см. app/register/actions.ts),
+      // но lib/demoProducts.ts не удаляем: retail может вернуться.
+      if (input.orgType === "HORECA") {
+        await seedHorecaDemo(tx, store.id);
+      } else {
+        const products = demoProducts();
+        await tx.product.createMany({
+          data: products.map((p) => ({
+            storeId: store.id,
+            name: p.name,
+            category: p.category,
+            price: p.price,
+            costPrice: p.costPrice,
+            unit: p.unit,
+            stock: p.stock,
+            barcode: p.barcode,
+            showInPos: p.showInPos,
+            isActive: true,
+          })),
+        });
+      }
     }
 
     return { org, store, owner };

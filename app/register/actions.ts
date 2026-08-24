@@ -5,9 +5,10 @@ import { createSession, setSessionCookie } from "@/server/auth";
 import type { OrgType } from "@prisma/client";
 
 export async function registerAction(_prev: unknown, formData: FormData) {
+  const rawType = String(formData.get("orgType") ?? "");
   const input = {
     orgName: String(formData.get("orgName") ?? ""),
-    orgType: (String(formData.get("orgType") ?? "RETAIL") as OrgType),
+    orgType: (rawType === "RETAIL" ? "RETAIL" : "HORECA") as OrgType,
     storeName: String(formData.get("storeName") ?? ""),
     storeAddress: String(formData.get("storeAddress") ?? ""),
     storeCity: String(formData.get("storeCity") ?? ""),

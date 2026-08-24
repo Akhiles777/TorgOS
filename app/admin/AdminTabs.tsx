@@ -18,11 +18,11 @@ const RETAIL_TABS: AdminTab[] = [
   { href: "/admin/cameras", label: "Камеры" },
 ];
 
-// Вставляются сразу после «Товаров» (склад ингредиентов) — «Производство»
-// добавится сюда же по мере готовности соответствующего экрана.
+// Вставляются сразу после «Товаров» (склад ингредиентов).
 const HORECA_EXTRA_TABS: AdminTab[] = [
   { href: "/admin/menu", label: "Меню" },
   { href: "/admin/recipes", label: "Рецепты" },
+  { href: "/admin/production", label: "Производство" },
 ];
 
 export async function AdminTabs() {

@@ -8,7 +8,8 @@ import type { TenantDb } from "../tenant";
 
 // Тип tx внутри db.$transaction(async (tx) => ...) — выводим из сигнатуры
 // $transaction, чтобы не городить any и не дублировать его вручную.
-type Tx = Parameters<Parameters<TenantDb["$transaction"]>[0]>[0];
+// Экспортирован — переиспользуется server/services/horeca/orders.ts.
+export type Tx = Parameters<Parameters<TenantDb["$transaction"]>[0]>[0];
 
 export type CreateSaleInput = {
   storeId: string;

@@ -14,6 +14,7 @@ import { ProblemSection } from "./ProblemSection";
 import { HowItWorksSection } from "./HowItWorksSection";
 import { InventorySection } from "./InventorySection";
 import { PricingSection } from "./PricingSection";
+import { AudienceSection } from "./AudienceSection";
 import { FaqSection } from "./FaqSection";
 import { FinalCta } from "./FinalCta";
 import { ScrollReveal } from "./ScrollReveal";
@@ -34,15 +35,24 @@ export function Landing() {
         <HowItWorksSection />
         <InventorySection />
         <PricingSection />
+        <AudienceSection />
         <FaqSection />
         <FinalCta />
       </main>
       <footer className="bg-land-ink px-6 md:px-10 py-8">
-        <div className="max-w-[1200px] mx-auto flex items-center justify-between text-land-small text-land-paper/50 font-landing-text">
+        <div className="max-w-[1200px] mx-auto flex flex-wrap items-center justify-between gap-4 text-land-small text-land-paper/50 font-landing-text">
           <span>ТоргОС</span>
-          <Link href="/login" className="underline underline-offset-2 hover:text-land-paper">
-            Уже есть аккаунт? Войти
-          </Link>
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+            <Link href="/legal/offer" className="underline underline-offset-2 hover:text-land-paper">
+              Публичная оферта
+            </Link>
+            <Link href="/legal/privacy" className="underline underline-offset-2 hover:text-land-paper">
+              Политика конфиденциальности
+            </Link>
+            <Link href="/login" className="underline underline-offset-2 hover:text-land-paper">
+              Уже есть аккаунт? Войти
+            </Link>
+          </div>
         </div>
       </footer>
     </div>

@@ -162,6 +162,33 @@ describe("tenant-изоляция", () => {
     expect(await prisma.recipeLine.count({ where: { menuItemId: menuItemB, productId: productB } })).toBe(1);
   });
 
+  it("внутри одной транзакции: создать-и-сразу-обновить в своей организации проходит, а FK на чужую организацию всё равно отклоняется", async () => {
+    // Регрессия: сверочные запросы tenantDb (существование записи, FK-проверка)
+    // раньше всегда шли через обычный prisma, который внутри активной
+    // $transaction(async (tx) => ...) не видит ещё не закоммиченные строки
+    // ЭТОЙ ЖЕ транзакции — например payOrder падал TenantError, пытаясь тут же
+    // после tx.order.create(...) выставить этому Order status: PAID. Исправлено
+    // в txAwareClient (см. отчёт по фиче HORECA, шаг 4b).
+    const dbA = tenantDb(orgA);
+    await dbA.$transaction(async (tx) => {
+      const order = await tx.order.create({ data: { storeId: storeA, userId: userA } });
+      await tx.order.update({ where: { id: order.id }, data: { comment: "обновлено в той же транзакции" } });
+      const after = await tx.order.findUnique({ where: { id: order.id } });
+      expect(after!.comment).toBe("обновлено в той же транзакции");
+    });
+
+    // Фикс не должен ослаблять изоляцию: в той же транзакции ссылка на чужую
+    // организацию (menuItemB принадлежит orgB) всё равно отклоняется.
+    await expect(
+      dbA.$transaction(async (tx) => {
+        const order = await tx.order.create({ data: { storeId: storeA, userId: userA } });
+        await tx.orderItem.create({
+          data: { orderId: order.id, menuItemId: menuItemB, nameAtSale: "инъекция", quantity: 1, priceAtSale: 1, costAtSale: 0 },
+        });
+      }),
+    ).rejects.toThrow(TenantError);
+  });
+
   it("OrderItem со снимком модификатора, ссылающимся на чужой addProductId, падает TenantError", async () => {
     const dbA = tenantDb(orgA);
     const order = await dbA.order.create({ data: { storeId: storeA, userId: userA } });

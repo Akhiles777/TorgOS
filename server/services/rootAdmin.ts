@@ -160,6 +160,34 @@ export async function searchUsers(query: string) {
   }));
 }
 
+export async function listLeads(filters: { venueType?: string; city?: string; readyToCall?: boolean } = {}) {
+  const rows = await prisma.lead.findMany({
+    where: {
+      ...(filters.venueType ? { venueType: filters.venueType } : {}),
+      ...(filters.city ? { city: { contains: filters.city, mode: "insensitive" as const } } : {}),
+      ...(filters.readyToCall === undefined ? {} : { readyToCall: filters.readyToCall }),
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  return rows.map((lead) => ({ ...lead, createdAt: lead.createdAt.toISOString(), contactedAt: lead.contactedAt?.toISOString() ?? null }));
+}
+
+export async function leadStats() {
+  const [total, ready, venueTypes, systems] = await Promise.all([
+    prisma.lead.count(),
+    prisma.lead.count({ where: { readyToCall: true } }),
+    prisma.lead.groupBy({ by: ["venueType"], _count: true, orderBy: { _count: { venueType: "desc" } } }),
+    prisma.lead.groupBy({ by: ["currentSystem"], _count: true, orderBy: { _count: { currentSystem: "desc" } } }),
+  ]);
+  return { total, ready, venueTypes: venueTypes.map((r) => ({ name: r.venueType, count: r._count })), systems: systems.map((r) => ({ name: r.currentSystem, count: r._count })) };
+}
+
+export async function updateLead(superAdminId: string, id: string, input: { contacted: boolean; note: string }) {
+  const lead = await prisma.lead.update({ where: { id }, data: { contactedAt: input.contacted ? new Date() : null, note: input.note.trim() || null } });
+  await logAudit(superAdminId, "lead_update", "Lead", id, { contacted: input.contacted });
+  return lead;
+}
+
 function randomPassword(): string {
   return randomBytes(9).toString("base64url"); // ~12 читаемых символов
 }

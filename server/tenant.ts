@@ -50,6 +50,7 @@ const TENANT_WHERE: Record<Prisma.ModelName, (orgId: string) => Where> = {
   SuperAdminAuditLog: superAdminOnly,
   // Анонимные посетители лендинга — тоже вне организаций, тот же принцип.
   SiteEvent: superAdminOnly,
+  Lead: superAdminOnly,
   PlatformBriefing: superAdminOnly,
   ImportBatch: (orgId) => ({ store: { organizationId: orgId } }),
   StoreAgent: (orgId) => ({ store: { organizationId: orgId } }),
@@ -112,7 +113,17 @@ function collectFks(data: unknown, acc: Record<FkTarget, Set<string>>) {
   }
 }
 
-async function assertFksBelongToOrg(orgId: string, data: unknown, organizationIdInData?: unknown) {
+// client — клиент, привязанный к ТЕКУЩЕМУ контексту выполнения (см. txAwareClient
+// и $allOperations ниже) — обычный prisma вне транзакции, клиент активной
+// транзакции изнутри db.$transaction(async (tx) => ...). Раньше здесь
+// использовался сырой импортированный `prisma` напрямую всегда — внутри
+// активной транзакции это читает уже закоммиченное состояние БД, а не то, что
+// видно внутри ещё не завершённой транзакции: FK-проверка на строку, только
+// что созданную этой же транзакцией (например Order, которому тут же
+// выставляют status: PAID), ложно не находила её и бросала TenantError.
+// См. отчёт по фиче HORECA, шаг 4b.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function assertFksBelongToOrg(client: any, orgId: string, data: unknown, organizationIdInData?: unknown) {
   if (organizationIdInData !== undefined && organizationIdInData !== orgId) throw new TenantError();
   const acc = {
     store: new Set<string>(), product: new Set<string>(), sale: new Set<string>(),
@@ -125,24 +136,58 @@ async function assertFksBelongToOrg(orgId: string, data: unknown, organizationId
   const checks: Promise<void>[] = [];
   const check = (count: Promise<number>, expected: number) =>
     checks.push(count.then((n) => { if (n !== expected) throw new TenantError(); }));
-  if (acc.store.size) check(prisma.store.count({ where: { id: { in: [...acc.store] }, organizationId: orgId } }), acc.store.size);
-  if (acc.product.size) check(prisma.product.count({ where: { id: { in: [...acc.product] }, store: { organizationId: orgId } } }), acc.product.size);
-  if (acc.sale.size) check(prisma.sale.count({ where: { id: { in: [...acc.sale] }, store: { organizationId: orgId } } }), acc.sale.size);
-  if (acc.user.size) check(prisma.user.count({ where: { id: { in: [...acc.user] }, organizationId: orgId } }), acc.user.size);
-  if (acc.employee.size) check(prisma.employee.count({ where: { id: { in: [...acc.employee] }, store: { organizationId: orgId } } }), acc.employee.size);
-  if (acc.inventorySession.size) check(prisma.inventorySession.count({ where: { id: { in: [...acc.inventorySession] }, store: { organizationId: orgId } } }), acc.inventorySession.size);
-  if (acc.importBatch.size) check(prisma.importBatch.count({ where: { id: { in: [...acc.importBatch] }, store: { organizationId: orgId } } }), acc.importBatch.size);
-  if (acc.storeAgent.size) check(prisma.storeAgent.count({ where: { id: { in: [...acc.storeAgent] }, store: { organizationId: orgId } } }), acc.storeAgent.size);
-  if (acc.cameraDevice.size) check(prisma.cameraDevice.count({ where: { id: { in: [...acc.cameraDevice] }, store: { organizationId: orgId } } }), acc.cameraDevice.size);
-  if (acc.menuItem.size) check(prisma.menuItem.count({ where: { id: { in: [...acc.menuItem] }, store: { organizationId: orgId } } }), acc.menuItem.size);
-  if (acc.menuCategory.size) check(prisma.menuCategory.count({ where: { id: { in: [...acc.menuCategory] }, store: { organizationId: orgId } } }), acc.menuCategory.size);
-  if (acc.modifierGroup.size) check(prisma.modifierGroup.count({ where: { id: { in: [...acc.modifierGroup] }, store: { organizationId: orgId } } }), acc.modifierGroup.size);
-  if (acc.order.size) check(prisma.order.count({ where: { id: { in: [...acc.order] }, store: { organizationId: orgId } } }), acc.order.size);
-  if (acc.productionDoc.size) check(prisma.productionDoc.count({ where: { id: { in: [...acc.productionDoc] }, store: { organizationId: orgId } } }), acc.productionDoc.size);
+  if (acc.store.size) check(client.store.count({ where: { id: { in: [...acc.store] }, organizationId: orgId } }), acc.store.size);
+  if (acc.product.size) check(client.product.count({ where: { id: { in: [...acc.product] }, store: { organizationId: orgId } } }), acc.product.size);
+  if (acc.sale.size) check(client.sale.count({ where: { id: { in: [...acc.sale] }, store: { organizationId: orgId } } }), acc.sale.size);
+  if (acc.user.size) check(client.user.count({ where: { id: { in: [...acc.user] }, organizationId: orgId } }), acc.user.size);
+  if (acc.employee.size) check(client.employee.count({ where: { id: { in: [...acc.employee] }, store: { organizationId: orgId } } }), acc.employee.size);
+  if (acc.inventorySession.size) check(client.inventorySession.count({ where: { id: { in: [...acc.inventorySession] }, store: { organizationId: orgId } } }), acc.inventorySession.size);
+  if (acc.importBatch.size) check(client.importBatch.count({ where: { id: { in: [...acc.importBatch] }, store: { organizationId: orgId } } }), acc.importBatch.size);
+  if (acc.storeAgent.size) check(client.storeAgent.count({ where: { id: { in: [...acc.storeAgent] }, store: { organizationId: orgId } } }), acc.storeAgent.size);
+  if (acc.cameraDevice.size) check(client.cameraDevice.count({ where: { id: { in: [...acc.cameraDevice] }, store: { organizationId: orgId } } }), acc.cameraDevice.size);
+  if (acc.menuItem.size) check(client.menuItem.count({ where: { id: { in: [...acc.menuItem] }, store: { organizationId: orgId } } }), acc.menuItem.size);
+  if (acc.menuCategory.size) check(client.menuCategory.count({ where: { id: { in: [...acc.menuCategory] }, store: { organizationId: orgId } } }), acc.menuCategory.size);
+  if (acc.modifierGroup.size) check(client.modifierGroup.count({ where: { id: { in: [...acc.modifierGroup] }, store: { organizationId: orgId } } }), acc.modifierGroup.size);
+  if (acc.order.size) check(client.order.count({ where: { id: { in: [...acc.order] }, store: { organizationId: orgId } } }), acc.order.size);
+  if (acc.productionDoc.size) check(client.productionDoc.count({ where: { id: { in: [...acc.productionDoc] }, store: { organizationId: orgId } } }), acc.productionDoc.size);
   await Promise.all(checks);
 }
 
 const lc = (s: string) => (s[0].toLowerCase() + s.slice(1)) as Uncapitalize<Prisma.ModelName>;
+
+// Внутри активной db.$transaction(async (tx) => ...) сверочные запросы ниже
+// (существование записи, принадлежность FK) должны видеть ещё не закоммиченные
+// строки ЭТОЙ ЖЕ транзакции — иначе, например, Order, только что созданный в
+// этой транзакции, «не находится», когда тут же пытаемся выставить ему
+// status: PAID (см. отчёт по фиче HORECA, шаг 4b — обнаружено на payOrder).
+// Обычный импортированный `prisma` этого не видит: отдельное соединение/снепшот,
+// стандартная изоляция транзакций постгреса.
+//
+// Prisma НЕ даёт официального публичного способа получить клиент на текущей
+// транзакции изнутри $allOperations (Prisma.getExtensionContext(this) в
+// текущей версии этого не делает — проверено эмпирически, а не по памяти).
+// Единственный рабочий путь — недокументированный internal API
+// (__internalParams.transaction + _createItxClient), которым в реальности
+// пользуется сообщество ровно для этого сценария (row-level security/tenant-
+// изоляция в extensions). Раз он internal — версия Prisma может его убрать
+// или изменить форму. try/catch с фолбэком на обычный prisma — не косметика:
+// если API пропадёт, поведение тихо откатится к прежнему (та же проверка не
+// увидит несохранённые строки этой же транзакции — старое, уже жившее в
+// проекте ограничение), а не сломает tenant-изоляцию целиком.
+function txAwareClient(rest: unknown): typeof prisma {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const transaction = (rest as any)?.__internalParams?.transaction;
+    if (transaction?.kind === "itx") {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const client = (prisma as any)._createItxClient(transaction);
+      if (client) return client;
+    }
+  } catch {
+    // Форма internal API изменилась — молча используем обычный prisma (см. коммент выше).
+  }
+  return prisma;
+}
 
 export function tenantDb(orgId: string) {
   if (!orgId) throw new TenantError("Не задана организация");
@@ -151,9 +196,10 @@ export function tenantDb(orgId: string) {
     query: {
       $allModels: {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        async $allOperations({ model, operation, args, query }: any) {
+        async $allOperations({ model, operation, args, query, ...rest }: any) {
           const guard = TENANT_WHERE[model as Prisma.ModelName](orgId);
-          const delegate = (prisma as never as Record<string, any>)[lc(model)]; // eslint-disable-line @typescript-eslint/no-explicit-any
+          const client = txAwareClient(rest);
+          const delegate = (client as never as Record<string, any>)[lc(model)]; // eslint-disable-line @typescript-eslint/no-explicit-any
           const withGuard = (where: Where | undefined): Where => ({ AND: [guard, where ?? {}] });
 
           switch (operation) {
@@ -189,12 +235,12 @@ export function tenantDb(orgId: string) {
             case "delete": {
               const found = await delegate.findFirst({ where: withGuard(args?.where), select: { id: true } });
               if (!found) throw new TenantError("Запись не найдена в вашей организации");
-              if (operation === "update") await assertFksBelongToOrg(orgId, args?.data, args?.data?.organizationId);
+              if (operation === "update") await assertFksBelongToOrg(client, orgId, args?.data, args?.data?.organizationId);
               return query(args);
             }
 
             case "upsert": {
-              await assertFksBelongToOrg(orgId, [args?.create, args?.update], args?.create?.organizationId);
+              await assertFksBelongToOrg(client, orgId, [args?.create, args?.update], args?.create?.organizationId);
               // См. комментарий у findUnique выше — то же ограничение на составные ключи.
               const exists = await delegate.findUnique({ where: args?.where, select: { id: true } });
               if (exists) {
@@ -208,7 +254,7 @@ export function tenantDb(orgId: string) {
             case "createMany":
             case "createManyAndReturn": {
               const data = args?.data;
-              await assertFksBelongToOrg(orgId, data, Array.isArray(data) ? undefined : data?.organizationId);
+              await assertFksBelongToOrg(client, orgId, data, Array.isArray(data) ? undefined : data?.organizationId);
               return query(args);
             }
 

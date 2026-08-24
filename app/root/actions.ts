@@ -6,6 +6,7 @@ import { setSessionCookie } from "@/server/auth";
 import {
   updateOrgPlan, extendTrial, setOrgStatus, deleteOrganization, resetUserPassword, startImpersonation,
   searchUsers, RootAdminError,
+  updateLead,
 } from "@/server/services/rootAdmin";
 import type { Plan, SubscriptionStatus } from "@prisma/client";
 
@@ -14,6 +15,19 @@ type Result = { ok: true } | { ok: false; error: string };
 export async function searchUsersAction(query: string) {
   await requireSuperAdminApi();
   return searchUsers(query);
+}
+
+export async function updateLeadAction(id: string, contacted: boolean, note: string): Promise<Result> {
+  try {
+    const sa = await requireSuperAdminApi();
+    await updateLead(sa.id, id, { contacted, note });
+    revalidatePath("/root/leads");
+    return { ok: true };
+  } catch (e) {
+    if (e instanceof SuperAdminAuthError || e instanceof RootAdminError) return { ok: false, error: e.message };
+    console.error(e);
+    return { ok: false, error: "Не удалось сохранить заявку" };
+  }
 }
 
 export async function updatePlanAction(orgId: string, plan: Plan): Promise<Result> {
