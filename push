@@ -1,8 +1,8 @@
 cd /var/www/TorgOS
-git reset --hard origin/main
+
 git pull
 
-npm install
+
 npx prisma generate
 npx prisma migrate deploy
 npm run build

@@ -6,6 +6,8 @@ import {
 } from "@/server/services/products";
 import { createStaff, StaffError } from "@/server/services/receipts";
 import { createEmployee, deactivateEmployee, ShiftError } from "@/server/services/shift";
+import { lookupBarcode, BarcodeLookupError } from "@/server/ai/barcodeLookup";
+import { isValidBarcode } from "@/lib/ean13";
 import { parseRuNumber } from "@/lib/format";
 import type { MovementType, Role, Unit } from "@prisma/client";
 
@@ -62,6 +64,25 @@ export async function saveProductAction(_prev: unknown, fd: FormData): Promise<R
     if (e instanceof AuthError) return { ok: false, error: e.message };
     console.error(e);
     return { ok: false, error: "Не удалось сохранить товар" };
+  }
+}
+
+// Быстрое добавление товара: продавец вводит штрихкод (и цену — отдельно
+// в форме), ИИ предполагает название и категорию. Результат только
+// предзаполняет форму — ничего не сохраняется здесь, человек проверяет и
+// правит перед «Сохранить» (см. ProductModal в ProductsManager.tsx).
+export async function lookupBarcodeAction(barcode: string): Promise<{ ok: true; name: string; category: string } | { ok: false; error: string }> {
+  try {
+    const { db, storeId } = await requireApiStoreScope("ADMIN", "OWNER");
+    const clean = barcode.trim();
+    if (!isValidBarcode(clean)) return { ok: false, error: "Некорректный штрихкод (нужен EAN-13 или EAN-8)" };
+    const rows = await db.product.findMany({ where: { storeId }, select: { category: true }, distinct: ["category"] });
+    const result = await lookupBarcode(clean, rows.map((r) => r.category));
+    return { ok: true, name: result.name, category: result.category };
+  } catch (e) {
+    if (e instanceof BarcodeLookupError || e instanceof AuthError) return { ok: false, error: e.message };
+    console.error(e);
+    return { ok: false, error: "Не удалось определить товар" };
   }
 }
 

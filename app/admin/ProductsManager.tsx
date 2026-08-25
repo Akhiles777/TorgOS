@@ -6,7 +6,7 @@ import { Barcode } from "@/components/Barcode";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
 import { money, money0, qty, unitLabel, parseRuNumber } from "@/lib/format";
 import type { ProductRow, ProductFilter } from "@/server/services/products";
-import { saveProductAction, moveStockAction, deleteProductAction, toggleActiveAction } from "./actions";
+import { saveProductAction, moveStockAction, deleteProductAction, toggleActiveAction, lookupBarcodeAction } from "./actions";
 import { Overlay } from "@/components/pos/WeightModal";
 
 const FILTER_LABELS: Record<ProductFilter, string> = {
@@ -385,6 +385,30 @@ function ProductModal({ product, initialBarcode, onClose }: { product: ProductRo
   const barcodeRef = useRef<HTMLInputElement>(null);
   const [scanningBarcode, setScanningBarcode] = useState(false);
 
+  // Быстрое добавление: название/категорию можно попросить угадать по
+  // штрихкоду через ИИ — контролируемые поля, чтобы кнопка могла их заполнить,
+  // а человек мог тут же поправить перед сохранением (форма и есть «развёрнутая
+  // проверка» — ничего не сохраняется, пока не нажато «Сохранить»).
+  const [name, setName] = useState(product?.name ?? "");
+  const [category, setCategory] = useState(product?.category ?? "");
+  const [lookupPending, startLookup] = useTransition();
+  const [lookupError, setLookupError] = useState<string | null>(null);
+
+  const runLookup = () => {
+    const code = barcodeRef.current?.value.trim() ?? "";
+    if (!code) { setLookupError("Сначала укажите штрихкод"); return; }
+    setLookupError(null);
+    startLookup(async () => {
+      const res = await lookupBarcodeAction(code);
+      if (res.ok) {
+        setName(res.name);
+        if (res.category) setCategory(res.category);
+      } else {
+        setLookupError(res.error);
+      }
+    });
+  };
+
   const onSubmit = (fd: FormData) => {
     fd.set("unit", unit);
     start(async () => {
@@ -409,12 +433,24 @@ function ProductModal({ product, initialBarcode, onClose }: { product: ProductRo
         {product && <input type="hidden" name="id" value={product.id} />}
         <label className="block">
           <span className="text-sm text-ink-soft">Название</span>
-          <input name="name" defaultValue={product?.name} required autoFocus className="w-full h-11 px-3 bg-paper border border-line rounded-tag focus:border-ink" />
+          <input
+            name="name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            autoFocus={!!product}
+            className="w-full h-11 px-3 bg-paper border border-line rounded-tag focus:border-ink"
+          />
         </label>
         <div className="grid grid-cols-2 gap-3">
           <label className="block">
             <span className="text-sm text-ink-soft">Категория</span>
-            <input name="category" defaultValue={product?.category} className="w-full h-11 px-3 bg-paper border border-line rounded-tag focus:border-ink" />
+            <input
+              name="category"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="w-full h-11 px-3 bg-paper border border-line rounded-tag focus:border-ink"
+            />
           </label>
           <div>
             <span className="text-sm text-ink-soft">Единица</span>
@@ -461,6 +497,9 @@ function ProductModal({ product, initialBarcode, onClose }: { product: ProductRo
               <input
                 ref={barcodeRef}
                 name="barcode"
+                // На новом товаре курсор стартует здесь: сценарий «быстрое
+                // добавление» начинается со скана/ввода штрихкода, а не названия.
+                autoFocus={!product}
                 defaultValue={product?.barcode ?? initialBarcode ?? ""}
                 placeholder={unit === "KG" ? "сгенерируется" : "13 или 8 цифр"}
                 onKeyDown={(e) => e.key === "Enter" && e.preventDefault()}
@@ -476,6 +515,17 @@ function ProductModal({ product, initialBarcode, onClose }: { product: ProductRo
                 <CameraIcon />
               </button>
             </div>
+            {!product && (
+              <button
+                type="button"
+                onClick={runLookup}
+                disabled={lookupPending}
+                className="mt-1.5 text-xs text-ink-soft hover:text-ink underline underline-offset-2 disabled:opacity-50"
+              >
+                {lookupPending ? "Определяю…" : "✨ Определить по ИИ"}
+              </button>
+            )}
+            {lookupError && <span className="block text-xs text-stamp-text mt-1">{lookupError}</span>}
           </label>
           <label className="block">
             <span className="text-sm text-ink-soft">Срок годности</span>
