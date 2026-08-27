@@ -4,7 +4,20 @@
 // ручная форма — та же валидация штрихкода, та же защита от дублей.
 import type { TenantDb } from "../tenant";
 import { createProduct, moveStock, ProductError } from "./products";
-import type { Unit } from "@prisma/client";
+import { Prisma, type Unit } from "@prisma/client";
+
+// Проверка дубля в createProduct и запись — не атомарны, поэтому две кассы,
+// заводящие один штрихкод одновременно, могут проскочить проверку и упереться
+// уже в уникальный индекс БД (@@unique([storeId, barcode])). Ошибку индекса
+// переводим в тот же текст, что и обычный дубль, — для человека это одно и то
+// же событие, а не «неизвестный сбой».
+export function describeSaveError(e: unknown): string | null {
+  if (e instanceof ProductError) return e.message;
+  if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+    return "Такой штрихкод уже есть в этой точке";
+  }
+  return null;
+}
 
 export type QuickRow = {
   barcode: string;
@@ -51,9 +64,9 @@ export async function saveQuickRows(
       }
       result.created.push({ barcode: r.barcode, name: created.name });
     } catch (e) {
-      const error = e instanceof ProductError ? e.message : "Не удалось сохранить";
-      if (!(e instanceof ProductError)) console.error("quick add failed", r.barcode, e);
-      result.failed.push({ barcode: r.barcode, name: r.name, error });
+      const known = describeSaveError(e);
+      if (!known) console.error("quick add failed", r.barcode, e);
+      result.failed.push({ barcode: r.barcode, name: r.name, error: known ?? "Не удалось сохранить" });
     }
   }
 

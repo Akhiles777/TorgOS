@@ -82,39 +82,46 @@ export function QuickProductModal({
 
   return (
     <Modal onCancel={onCancel}>
-      <div className="w-[min(94vw,520px)] font-app-text">
+      {/* text-base: касса рендерится в text-lg, на телефоне форма из-за этого
+          не помещалась по ширине. */}
+      <div className="w-[520px] max-w-full font-app-text text-base">
         <h2 className="text-xl font-semibold mb-1">Новый товар</h2>
         <p className="text-sm text-ink-soft mb-4">
           Товара с таким штрихкодом нет в базе. Заведите его здесь — и он сразу попадёт в чек.
         </p>
 
-        <label className="block mb-3">
+        <div className="mb-3">
           <span className="text-sm text-ink-soft">Штрихкод</span>
-          <div className="flex gap-2">
+          {/* На телефоне поле занимает всю ширину, кнопки уходят под него —
+              иначе три элемента в ряд не влезают и обрезаются. */}
+          <div className="flex flex-col sm:flex-row gap-2">
             <input
               ref={barcodeRef}
               value={barcode}
               inputMode="numeric"
+              aria-label="Штрихкод"
               onChange={(e) => setBarcode(e.target.value.replace(/[^\d]/g, ""))}
-              className="flex-1 h-12 px-3 bg-paper border border-line rounded-tag font-app-mono text-base focus:border-ink"
+              className="w-full sm:flex-1 min-w-0 h-12 px-3 bg-paper border border-line rounded-tag font-app-mono text-base focus:border-ink"
             />
-            <button
-              type="button"
-              onClick={() => setScannerOpen(true)}
-              className="h-12 px-4 rounded-tag border border-line text-ink-soft hover:border-ink shrink-0"
-            >
-              Скан
-            </button>
-            <button
-              type="button"
-              onClick={lookup}
-              disabled={looking || !barcode.trim()}
-              className="h-12 px-4 rounded-tag border-2 border-ink font-medium disabled:opacity-40 shrink-0"
-            >
-              {looking ? "Ищу…" : "✨ Найти по ИИ"}
-            </button>
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setScannerOpen(true)}
+                className="h-12 px-4 rounded-tag border border-line text-ink-soft hover:border-ink"
+              >
+                Скан
+              </button>
+              <button
+                type="button"
+                onClick={lookup}
+                disabled={looking || !barcode.trim()}
+                className="h-12 px-3 rounded-tag border-2 border-ink font-medium disabled:opacity-40 whitespace-nowrap"
+              >
+                {looking ? "Ищу…" : "✨ Найти по ИИ"}
+              </button>
+            </div>
           </div>
-        </label>
+        </div>
 
         {hint && <p className="text-fresh-text text-sm mb-2">{hint}</p>}
 
@@ -140,7 +147,7 @@ export function QuickProductModal({
                 setPrice(v);
                 if (!costTouched) setCostPrice(defaultCost(parseRuNumber(v)));
               }}
-              className="w-full h-12 px-3 bg-paper border border-line rounded-tag font-app-mono text-base focus:border-ink"
+              className="w-full min-w-0 h-12 px-3 bg-paper border border-line rounded-tag font-app-mono text-base focus:border-ink"
             />
           </label>
           <label className="block">
@@ -149,32 +156,34 @@ export function QuickProductModal({
               value={costPrice}
               inputMode="decimal"
               onChange={(e) => { setCostPrice(e.target.value.replace(/[^\d.,]/g, "")); setCostTouched(true); }}
-              className="w-full h-12 px-3 bg-paper border border-line rounded-tag font-app-mono text-base focus:border-ink"
+              className="w-full min-w-0 h-12 px-3 bg-paper border border-line rounded-tag font-app-mono text-base focus:border-ink"
             />
           </label>
         </div>
 
-        <div className="grid grid-cols-3 gap-3 mb-4">
-          <label className="block col-span-1">
+        {/* На телефоне три поля в ряд не помещаются: категория занимает всю
+            ширину, остаток и единица делят следующую строку. */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+          <label className="block col-span-2 sm:col-span-1">
             <span className="text-sm text-ink-soft">Категория</span>
             <input
               value={category}
               onChange={(e) => setCategory(e.target.value)}
               placeholder="Прочее"
-              className="w-full h-12 px-3 bg-paper border border-line rounded-tag text-base focus:border-ink"
+              className="w-full min-w-0 h-12 px-3 bg-paper border border-line rounded-tag text-base focus:border-ink"
             />
           </label>
-          <label className="block col-span-1">
+          <label className="block">
             <span className="text-sm text-ink-soft">Остаток</span>
             <input
               value={stock}
               inputMode="decimal"
               placeholder="0"
               onChange={(e) => setStock(e.target.value.replace(/[^\d.,]/g, ""))}
-              className="w-full h-12 px-3 bg-paper border border-line rounded-tag font-app-mono text-base focus:border-ink"
+              className="w-full min-w-0 h-12 px-3 bg-paper border border-line rounded-tag font-app-mono text-base focus:border-ink"
             />
           </label>
-          <div className="col-span-1">
+          <div className="min-w-0">
             <span className="text-sm text-ink-soft">Единица</span>
             <SegmentedControl
               fill

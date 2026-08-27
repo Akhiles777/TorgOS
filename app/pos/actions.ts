@@ -1,8 +1,10 @@
 "use server";
 import { requireApiStoreScope, AuthError } from "@/server/guard";
 import { startShift, ShiftError } from "@/server/services/shift";
-import { createProduct, moveStock, ProductError } from "@/server/services/products";
+import { createProduct, moveStock } from "@/server/services/products";
+import { describeSaveError } from "@/server/services/quickAdd";
 import { lookupBarcode } from "@/server/ai/barcodeLookup";
+import { reserveAiLookups, AiBudgetError } from "@/server/ai/aiBudget";
 import { isValidBarcode } from "@/lib/ean13";
 import { toNum } from "@/lib/format";
 import type { PosProduct } from "@/server/services/pos";
@@ -35,11 +37,18 @@ export async function posLookupBarcodeAction(barcode: string): Promise<PosLookup
     const { db, storeId } = await requireApiStoreScope("OWNER", "ADMIN", "CASHIER");
     const clean = barcode.trim();
     if (!isValidBarcode(clean)) return { ok: false, error: "Некорректный штрихкод" };
+    // Если товар уже заведён (кассир набрал код руками) — платный запрос к ИИ
+    // не нужен, отвечаем из своей же базы.
+    const own = await db.product.findFirst({ where: { storeId, barcode: clean }, select: { name: true, category: true } });
+    if (own) return { ok: true, name: own.name, category: own.category };
+
+    reserveAiLookups(storeId, 1);
     const cats = await db.product.findMany({ where: { storeId }, select: { category: true }, distinct: ["category"] });
     const res = await lookupBarcode(clean, cats.map((c) => c.category).filter(Boolean));
     if (!res.found) return { ok: false, error: res.error };
     return { ok: true, name: res.name, category: res.category };
   } catch (e) {
+    if (e instanceof AiBudgetError) return { ok: false, error: e.message };
     if (e instanceof AuthError) return { ok: false, error: e.message };
     console.error("posLookupBarcode error", e);
     return { ok: false, error: "Не удалось найти товар" };
@@ -74,7 +83,10 @@ export async function posCreateProductAction(input: {
       },
     };
   } catch (e) {
-    if (e instanceof ProductError || e instanceof AuthError) return { ok: false, error: e.message };
+    if (e instanceof AuthError) return { ok: false, error: e.message };
+    // Включая гонку двух касс по одному штрихкоду — см. describeSaveError.
+    const known = describeSaveError(e);
+    if (known) return { ok: false, error: known };
     console.error("posCreateProduct error", e);
     return { ok: false, error: "Не удалось создать товар" };
   }

@@ -21,7 +21,7 @@ type Row = {
   stock: number;
   // Статус распознавания: чтобы после «Сканирования ИИ» было видно, что нашли,
   // а что нужно дописать руками.
-  status: "new" | "found" | "notfound";
+  status: "new" | "found" | "notfound" | "exists";
   note?: string;
 };
 
@@ -32,6 +32,34 @@ const nextKey = () => `r${Date.now().toString(36)}${++seq}`;
 // Себестоимость по умолчанию — та же формула, что в ручной форме товара
 // (цена минус её пятая часть), чтобы наценка считалась осмысленно сразу.
 const defaultCost = (price: number) => (price > 0 ? Math.round((price - price / 5) * 100) / 100 : 0);
+
+const num = (v: unknown) => {
+  const n = typeof v === "number" ? v : parseFloat(String(v ?? "").replace(",", "."));
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+};
+
+// Черновик лежит в localStorage — его мог испортить старый формат, ручная
+// правка через DevTools или обрыв записи. Всё, что оттуда приходит, приводим
+// к валидной строке, иначе экран падал бы на NaN в расчёте наценки.
+function sanitizeRow(raw: unknown): Row | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const barcode = String(r.barcode ?? "").trim();
+  if (!barcode) return null;
+  const status = r.status === "found" || r.status === "notfound" ? r.status : "new";
+  return {
+    key: typeof r.key === "string" && r.key ? r.key : nextKey(),
+    barcode,
+    price: num(r.price),
+    name: String(r.name ?? ""),
+    category: String(r.category ?? ""),
+    costPrice: num(r.costPrice),
+    unit: r.unit === "KG" ? "KG" : "PCS",
+    stock: num(r.stock),
+    status,
+    note: typeof r.note === "string" ? r.note : undefined,
+  };
+}
 
 export function QuickAddScreen({ storeId }: { storeId: string }) {
   const storageKey = STORAGE_PREFIX + storeId;
@@ -57,7 +85,7 @@ export function QuickAddScreen({ storeId }: { storeId: string }) {
       const saved = localStorage.getItem(storageKey);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) setRows(parsed);
+        if (Array.isArray(parsed)) setRows(parsed.map(sanitizeRow).filter((r): r is Row => r !== null));
       }
     } catch {
       // повреждённый черновик — не повод падать, начинаем с пустого списка
@@ -117,7 +145,13 @@ export function QuickAddScreen({ storeId }: { storeId: string }) {
           const found = byCode.get(r.barcode);
           if (!found || r.name.trim()) return r;
           if (found.found) {
-            return { ...r, name: found.name, category: found.category, status: "found", note: undefined };
+            return {
+              ...r,
+              name: found.name,
+              category: found.category,
+              status: found.known ? "exists" : "found",
+              note: found.known ? "уже есть в базе — сохранить не выйдет" : undefined,
+            };
           }
           return { ...r, status: "notfound", note: found.error };
         }),
@@ -125,7 +159,12 @@ export function QuickAddScreen({ storeId }: { storeId: string }) {
     });
   };
 
-  const readyToSave = rows.filter((r) => r.name.trim());
+  // Готова к сохранению строка с названием и ненулевой ценой. Цену можно
+  // обнулить руками уже после добавления — товар за 0 ₽ в кассе бесполезен, а
+  // молча сохранять такое хуже, чем показать причину.
+  const readyToSave = rows.filter((r) => r.name.trim() && r.price > 0 && r.status !== "exists");
+  const zeroPriced = rows.filter((r) => r.name.trim() && r.price <= 0 && r.status !== "exists").length;
+  const alreadyInBase = rows.filter((r) => r.status === "exists").length;
   const save = () => {
     if (!readyToSave.length) return;
     setError(null);
@@ -163,8 +202,11 @@ export function QuickAddScreen({ storeId }: { storeId: string }) {
       {/* Ввод: штрихкод + цена. Сканер-пистолет шлёт Enter — по нему прыгаем
           в цену, по второму Enter строка уходит в список и фокус возвращается. */}
       <div className="bg-paper-2 border border-line rounded-tag p-3 mb-4">
+        {/* На телефоне штрихкод занимает всю ширину (это главное поле), а цена
+            и кнопки делят строку под ним — иначе каждая кнопка вставала бы в
+            отдельный ряд и форма не помещалась на экран. */}
         <div className="flex flex-wrap items-end gap-2">
-          <label className="block flex-1 min-w-[200px]">
+          <label className="block w-full sm:flex-1 sm:min-w-[200px]">
             <span className="text-sm text-ink-soft">Штрихкод</span>
             <input
               ref={barcodeRef}
@@ -174,10 +216,10 @@ export function QuickAddScreen({ storeId }: { storeId: string }) {
               placeholder="сканируйте или введите"
               onChange={(e) => { setBarcode(e.target.value.replace(/[^\d]/g, "")); setInputError(null); }}
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); priceRef.current?.focus(); } }}
-              className="w-full h-12 px-3 bg-paper border border-line rounded-tag font-app-mono text-lg focus:border-ink"
+              className="w-full min-w-0 h-12 px-3 bg-paper border border-line rounded-tag font-app-mono text-lg focus:border-ink"
             />
           </label>
-          <label className="block w-32">
+          <label className="block w-24 sm:w-32 shrink-0">
             <span className="text-sm text-ink-soft">Цена, ₽</span>
             <input
               ref={priceRef}
@@ -185,11 +227,14 @@ export function QuickAddScreen({ storeId }: { storeId: string }) {
               inputMode="decimal"
               onChange={(e) => { setPrice(e.target.value.replace(/[^\d.,]/g, "")); setInputError(null); }}
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addRow(barcode, price); } }}
-              className="w-full h-12 px-3 bg-paper border border-line rounded-tag font-app-mono text-lg focus:border-ink"
+              className="w-full min-w-0 h-12 px-3 bg-paper border border-line rounded-tag font-app-mono text-lg focus:border-ink"
             />
           </label>
-          <Button variant="line" size="lg" onClick={() => setScannerOpen(true)}>Камера</Button>
-          <Button variant="stamp" size="lg" onClick={() => addRow(barcode, price)}>Добавить в список</Button>
+          <Button variant="line" size="lg" className="shrink-0" onClick={() => setScannerOpen(true)}>Камера</Button>
+          <Button variant="stamp" size="lg" className="flex-1 sm:flex-none" onClick={() => addRow(barcode, price)}>
+            <span className="sm:hidden">Добавить</span>
+            <span className="hidden sm:inline">Добавить в список</span>
+          </Button>
         </div>
         {inputError && <p className="text-stamp-text text-sm mt-2">{inputError}</p>}
       </div>
@@ -200,16 +245,18 @@ export function QuickAddScreen({ storeId }: { storeId: string }) {
         <EmptyState>Список пуст. Отсканируйте первый товар — он появится здесь.</EmptyState>
       ) : (
         <>
-          <div className="flex flex-wrap items-center gap-2 mb-2">
-            <h2 className="font-semibold mr-auto">
+          {/* На телефоне кнопки идут сеткой 2×2 вместо колонки в четыре ряда:
+              «Сохранить» на всю ширину, как главное действие. */}
+          <div className="grid grid-cols-2 gap-2 mb-2 sm:flex sm:flex-wrap sm:items-center">
+            <h2 className="font-semibold col-span-2 sm:mr-auto">
               В списке: {rows.length}
               {pending.length > 0 && <span className="text-ink-soft font-normal"> · без названия: {pending.length}</span>}
             </h2>
-            <Button variant="ghost" onClick={() => setClearAsk(true)}>Очистить список</Button>
+            <Button variant="ghost" onClick={() => setClearAsk(true)}>Очистить</Button>
             <Button variant="line" onClick={runLookup} disabled={looking || pending.length === 0}>
               {looking ? `ИИ ищет… (${pending.length})` : `✨ Сканирование ИИ (${pending.length})`}
             </Button>
-            <Button variant="stamp" onClick={save} disabled={saving || readyToSave.length === 0}>
+            <Button variant="stamp" className="col-span-2 sm:col-span-1" onClick={save} disabled={saving || readyToSave.length === 0}>
               {saving ? "Сохраняем…" : `Сохранить в базу (${readyToSave.length})`}
             </Button>
           </div>
@@ -219,18 +266,32 @@ export function QuickAddScreen({ storeId }: { storeId: string }) {
               {notFoundCount} шт. ИИ не нашёл в интернете — впишите название руками, и они тоже сохранятся.
             </p>
           )}
+          {zeroPriced > 0 && (
+            <p className="text-sm text-warn-text mb-2">
+              {zeroPriced} шт. с нулевой ценой — такие не сохранятся, проставьте цену.
+            </p>
+          )}
+          {alreadyInBase > 0 && (
+            <p className="text-sm text-warn-text mb-2">
+              {alreadyInBase} шт. уже есть в базе — их не сохранить повторно. Уберите из списка,
+              а цену поменяйте в разделе «Товары».
+            </p>
+          )}
 
           <div className="space-y-2">
             {rows.map((r) => (
               <div
                 key={r.key}
                 className={`border rounded-tag p-3 ${
-                  r.status === "notfound" && !r.name.trim() ? "border-warn bg-warn/5" : "border-line bg-paper-2"
+                  r.status === "exists" || (r.status === "notfound" && !r.name.trim())
+                    ? "border-warn bg-warn/5"
+                    : "border-line bg-paper-2"
                 }`}
               >
                 <div className="flex items-center gap-2 mb-2">
                   <span className="font-app-mono text-xs text-ink-soft shrink-0">{r.barcode}</span>
                   {r.status === "found" && <span className="text-xs text-fresh-text shrink-0">нашёл ИИ</span>}
+                  {r.status === "exists" && <span className="text-xs text-warn-text shrink-0">{r.note ?? "уже есть в базе"}</span>}
                   {r.status === "notfound" && <span className="text-xs text-warn-text shrink-0">{r.note ?? "не найден"}</span>}
                   <span className="ml-auto" />
                   <button onClick={() => removeRow(r.key)} className="text-xs text-ink-soft hover:text-stamp-text px-2 shrink-0">
@@ -243,27 +304,32 @@ export function QuickAddScreen({ storeId }: { storeId: string }) {
                   placeholder="Название — заполнит ИИ или впишите сами"
                   className="w-full h-10 px-2 mb-2 bg-paper border border-line rounded-tag font-medium focus:border-ink"
                 />
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                {/* Телефон: категория на всю ширину, остальное сеткой 2×2.
+                    sm:contents растворяет обёртку, и на планшете/десктопе все
+                    пять полей встают в один ряд, как раньше. */}
+                <div className="grid gap-2 sm:grid-cols-5">
                   <label className="block">
                     <span className="block text-xs text-ink-soft mb-0.5">Категория</span>
                     <input
                       value={r.category}
                       onChange={(e) => patch(r.key, { category: e.target.value })}
                       placeholder="Прочее"
-                      className="w-full h-9 px-2 bg-paper border border-line rounded-tag text-sm focus:border-ink"
+                      className="w-full min-w-0 h-9 px-2 bg-paper border border-line rounded-tag text-sm focus:border-ink"
                     />
                   </label>
-                  <NumBox label="Цена, ₽" value={r.price} onChange={(v) => patch(r.key, { price: v })} />
-                  <NumBox label="Себест., ₽" value={r.costPrice} onChange={(v) => patch(r.key, { costPrice: v })} />
-                  <NumBox label="Остаток" value={r.stock} onChange={(v) => patch(r.key, { stock: v })} />
-                  <div>
-                    <span className="block text-xs text-ink-soft mb-0.5">Единица</span>
-                    <SegmentedControl
-                      fill
-                      value={r.unit}
-                      onChange={(u) => patch(r.key, { unit: u })}
-                      options={[{ value: "PCS" as const, label: "шт" }, { value: "KG" as const, label: "кг" }]}
-                    />
+                  <div className="grid grid-cols-2 gap-2 sm:contents">
+                    <NumBox label="Цена, ₽" value={r.price} onChange={(v) => patch(r.key, { price: v })} />
+                    <NumBox label="Себест., ₽" value={r.costPrice} onChange={(v) => patch(r.key, { costPrice: v })} />
+                    <NumBox label="Остаток" value={r.stock} onChange={(v) => patch(r.key, { stock: v })} />
+                    <div className="min-w-0">
+                      <span className="block text-xs text-ink-soft mb-0.5">Единица</span>
+                      <SegmentedControl
+                        fill
+                        value={r.unit}
+                        onChange={(u) => patch(r.key, { unit: u })}
+                        options={[{ value: "PCS" as const, label: "шт" }, { value: "KG" as const, label: "кг" }]}
+                      />
+                    </div>
                   </div>
                 </div>
                 {r.price > 0 && r.costPrice > 0 && (

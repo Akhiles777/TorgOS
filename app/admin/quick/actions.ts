@@ -2,6 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { requireApiStoreScope, AuthError } from "@/server/guard";
 import { lookupBarcodes, type BarcodeLookupResult } from "@/server/ai/barcodeLookup";
+import { reserveAiLookups, AiBudgetError } from "@/server/ai/aiBudget";
 import { saveQuickRows, type QuickRow, type QuickSaveResult } from "@/server/services/quickAdd";
 import { isValidBarcode } from "@/lib/ean13";
 import type { Unit } from "@prisma/client";
@@ -19,13 +20,32 @@ async function storeCategories(db: Awaited<ReturnType<typeof requireApiStoreScop
 export async function lookupBarcodesAction(barcodes: string[]): Promise<LookupResult> {
   try {
     const { db, storeId } = await requireApiStoreScope("ADMIN", "OWNER");
-    const clean = barcodes.map((b) => b.trim()).filter((b) => isValidBarcode(b));
+    // Дедуп + отсев мусора до обращения к ИИ: каждый запрос платный.
+    const clean = [...new Set(barcodes.map((b) => b.trim()).filter((b) => isValidBarcode(b)))];
     if (clean.length === 0) return { ok: false, error: "Нет позиций с корректным штрихкодом" };
     // Разумный потолок на один заход — чтобы не подвесить запрос на полчаса.
     if (clean.length > 40) return { ok: false, error: "За раз можно распознать не больше 40 позиций" };
-    const results = await lookupBarcodes(clean, await storeCategories(db, storeId));
+
+    // Штрихкоды, которые уже есть в каталоге точки, ИИ спрашивать незачем:
+    // название известно, а сохранить такую строку всё равно не выйдет —
+    // createProduct отклонит дубль. Экономит и деньги, и время ожидания.
+    const known = await db.product.findMany({
+      where: { storeId, barcode: { in: clean } },
+      select: { barcode: true, name: true, category: true },
+    });
+    const knownByCode = new Map(known.map((k) => [k.barcode!, k]));
+    const unknown = clean.filter((c) => !knownByCode.has(c));
+
+    reserveAiLookups(storeId, unknown.length);
+    const fresh = unknown.length ? await lookupBarcodes(unknown, await storeCategories(db, storeId)) : [];
+
+    const results: BarcodeLookupResult[] = [
+      ...known.map((k) => ({ barcode: k.barcode!, found: true as const, name: k.name, category: k.category, known: true as const })),
+      ...fresh,
+    ];
     return { ok: true, results };
   } catch (e) {
+    if (e instanceof AiBudgetError) return { ok: false, error: e.message };
     if (e instanceof AuthError) return { ok: false, error: e.message };
     console.error(e);
     return { ok: false, error: "Не удалось распознать товары" };

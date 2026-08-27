@@ -249,7 +249,13 @@ export function Modal({ children, onCancel }: { children: ReactNode; onCancel: (
         if (e.target === e.currentTarget) onCancel();
       }}
     >
-      <div className="bg-paper rounded-tag border border-line shadow-2xl p-4 sm:p-6 my-auto max-h-[94dvh] overflow-y-auto">
+      {/* max-w-full обязателен: содержимое модалок задаёт ширину во vw
+          (w-[min(94vw,…)]), а эта обёртка добавляет к ней свой padding —
+          на телефоне сумма выходила шире экрана и правый край формы
+          обрезался. Ограничение по ширине контейнера чинит это разом для
+          всех модалок; min-w-0 нужен, чтобы длинные строки внутри не
+          распирали flex-элемент обратно. */}
+      <div className="bg-paper rounded-tag border border-line shadow-2xl p-4 sm:p-6 my-auto max-h-[94dvh] max-w-full min-w-0 overflow-y-auto">
         {children}
       </div>
     </div>
