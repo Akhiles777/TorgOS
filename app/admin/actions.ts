@@ -77,7 +77,8 @@ export async function lookupBarcodeAction(barcode: string): Promise<{ ok: true; 
     const clean = barcode.trim();
     if (!isValidBarcode(clean)) return { ok: false, error: "Некорректный штрихкод (нужен EAN-13 или EAN-8)" };
     const rows = await db.product.findMany({ where: { storeId }, select: { category: true }, distinct: ["category"] });
-    const result = await lookupBarcode(clean, rows.map((r) => r.category));
+    const result = await lookupBarcode(clean, rows.map((r) => r.category).filter(Boolean));
+    if (!result.found) return { ok: false, error: `${result.error}. Впишите название сами.` };
     return { ok: true, name: result.name, category: result.category };
   } catch (e) {
     if (e instanceof BarcodeLookupError || e instanceof AuthError) return { ok: false, error: e.message };

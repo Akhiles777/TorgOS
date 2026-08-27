@@ -14,13 +14,16 @@ export class AiUnavailableError extends Error {}
 
 type ChatMessage = { role: "system" | "user"; content: string };
 
-export async function chatComplete(messages: ChatMessage[], opts: { maxTokens?: number; model?: string } = {}): Promise<string> {
+export async function chatComplete(
+  messages: ChatMessage[],
+  opts: { maxTokens?: number; model?: string; timeoutMs?: number } = {},
+): Promise<string> {
   const apiKey = process.env.ROUTERAI_API_KEY;
   if (!apiKey) throw new AiUnavailableError("ROUTERAI_API_KEY не задан");
   const model = opts.model || process.env.ROUTERAI_MODEL || "anthropic/claude-sonnet-5";
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? TIMEOUT_MS);
   try {
     const res = await fetch(ENDPOINT, {
       method: "POST",

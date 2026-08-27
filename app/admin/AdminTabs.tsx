@@ -8,6 +8,7 @@ import { AdminTabsNav, type AdminTab } from "./AdminTabsNav";
 
 const RETAIL_TABS: AdminTab[] = [
   { href: "/admin", label: "Товары" },
+  { href: "/admin/quick", label: "Быстрое добавление" },
   { href: "/admin/assistant", label: "Приёмка ИИ" },
   { href: "/admin/inventory", label: "Инвентаризация" },
   { href: "/admin/receipts", label: "Чеки за день" },

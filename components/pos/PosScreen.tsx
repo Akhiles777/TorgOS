@@ -16,6 +16,7 @@ import { useStockSocket } from "./useStockSocket";
 import { useRemoteScan } from "./useRemoteScan";
 import { Modal, ReadoutPanel } from "@/components/ui";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
+import { QuickProductModal } from "./QuickProductModal";
 import { money0 } from "@/lib/format";
 import { logoutAction } from "@/app/logout/action";
 import { endImpersonationAction } from "@/app/impersonate/actions";
@@ -49,7 +50,9 @@ export function PosScreen({
   currentShift: ShiftEmployee | null;
   impersonating?: boolean;
 }) {
-  const [products] = useState(initialProducts);
+  // Список товаров пополняется прямо с кассы (заведение неизвестного
+  // штрихкода), поэтому это состояние, а не константа.
+  const [products, setProducts] = useState(initialProducts);
   const [stock, setStock] = useState<Record<string, number>>(() =>
     Object.fromEntries(initialProducts.map((p) => [p.id, p.stock])),
   );
@@ -64,6 +67,9 @@ export function PosScreen({
   const [pickingShift, setPickingShift] = useState(employees.length > 0 && !currentShift);
   // Камера-сканер: оверлей остаётся открытым между сканами — закрывает только кассир.
   const [cameraOpen, setCameraOpen] = useState(false);
+  // Заведение товара с кассы: строка — штрихкод, который пробили, но не нашли
+  // (или пустая, если кассир сам нажал «+ Товар»).
+  const [quickAdd, setQuickAdd] = useState<string | null>(null);
   // Подсказка с адресом /pos/scan — чтобы открыть его на другом устройстве.
   const [phoneScanInfoOpen, setPhoneScanInfoOpen] = useState(false);
   const [scanUrl, setScanUrl] = useState("");
@@ -75,9 +81,12 @@ export function PosScreen({
   const scanBuf = useRef("");
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const productsRef = useRef(products);
+  // handleScan читает каталог через ref (чтобы не пересоздаваться на каждое
+  // изменение) — держим ref в актуальном состоянии после заведения товара.
+  productsRef.current = products;
 
   const total = cart.reduce((s, l) => s + l.price * l.quantity, 0);
-  const modalOpen = mode.t === "weight" || mode.t === "payment" || cameraOpen;
+  const modalOpen = mode.t === "weight" || mode.t === "payment" || cameraOpen || quickAdd !== null;
 
   // Остатки с наложенными живыми обновлениями (для плиток)
   const liveProducts = products.map((p) => ({ ...p, stock: stock[p.id] ?? p.stock }));
@@ -154,7 +163,10 @@ export function PosScreen({
     (code: string) => {
       const found = productsRef.current.find((p) => p.barcode === code);
       if (!found) {
+        // Раньше здесь всё заканчивалось красным флешем и кассир звал админа.
+        // Теперь сразу предлагаем завести товар: ИИ найдёт название по коду.
         showFlash({ kind: "error", text: `Штрихкод ${code} не найден` });
+        setQuickAdd(code);
         return;
       }
       addProduct(found);
@@ -234,7 +246,9 @@ export function PosScreen({
   // Горячие клавиши: F2/F3 — оплата (карту не принимаем), Delete — очистить, Esc — закрыть
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (mode.t === "weight" || cameraOpen) return; // модалка веса и камера ловят свои клавиши
+      // Модалки веса/камеры/заведения товара ловят свои клавиши — F2/F3 не
+      // должны из-под них открывать оплату.
+      if (mode.t === "weight" || cameraOpen || quickAdd !== null) return;
       if (["F2", "F3"].includes(e.key)) {
         e.preventDefault();
         if (cart.length === 0) {
@@ -252,7 +266,7 @@ export function PosScreen({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [mode, cart, busy, clearCart, showFlash, cameraOpen]);
+  }, [mode, cart, busy, clearCart, showFlash, cameraOpen, quickAdd]);
 
   const incLine = (key: string) =>
     setCart((prev) => prev.map((l) => (l.key === key ? { ...l, quantity: l.unit === "PCS" ? l.quantity + 1 : Math.round((l.quantity + 0.1) * 1000) / 1000 } : l)));
@@ -326,6 +340,13 @@ export function PosScreen({
             title="Сканировать с другого устройства, а пробивать здесь"
           >
             С телефона
+          </button>
+          <button
+            onClick={() => setQuickAdd("")}
+            className="h-14 px-3 sm:px-4 rounded-tag border border-line font-medium hover:border-ink transition-colors shrink-0"
+            title="Завести новый товар прямо с кассы"
+          >
+            + Товар
           </button>
           <StatusDot status={socketStatus} />
           {/* Кто на смене — тап открывает пикер (пересменка среди дня) */}
@@ -418,6 +439,20 @@ export function PosScreen({
       )}
 
       {cameraOpen && <BarcodeScanner onScan={handleScan} onClose={() => setCameraOpen(false)} />}
+
+      {quickAdd !== null && (
+        <QuickProductModal
+          initialBarcode={quickAdd}
+          onCancel={() => setQuickAdd(null)}
+          onCreated={(product, addToCart) => {
+            setProducts((prev) => [...prev, product]);
+            setStock((prev) => ({ ...prev, [product.id]: product.stock }));
+            setQuickAdd(null);
+            if (addToCart) addProduct(product, product.unit === "KG" ? undefined : 1);
+            else showFlash({ kind: "add", text: `${product.name} — заведён` });
+          }}
+        />
+      )}
 
       {phoneScanInfoOpen && (
         <Modal onCancel={() => setPhoneScanInfoOpen(false)}>

@@ -1,0 +1,223 @@
+"use client";
+// Заведение товара прямо с кассы. Два сценария входа:
+//  1) пробили штрихкод, которого нет в базе — модалка открывается сама с
+//     подставленным кодом (покупатель ждёт, звать админа некогда);
+//  2) кассир сам нажал «+ Товар» в шапке.
+// В обоих случаях название можно не набивать руками — кнопка «Найти по ИИ»
+// ищет товар по штрихкоду в интернете. Всё показанное правится до сохранения.
+import { useEffect, useRef, useState } from "react";
+import { Modal, SegmentedControl } from "@/components/ui";
+import { BarcodeScanner } from "@/components/BarcodeScanner";
+import { isValidBarcode } from "@/lib/ean13";
+import { parseRuNumber } from "@/lib/format";
+import { posLookupBarcodeAction, posCreateProductAction } from "@/app/pos/actions";
+import type { PosProduct } from "./types";
+
+const defaultCost = (price: number) => (price > 0 ? String(Math.round((price - price / 5) * 100) / 100) : "");
+
+export function QuickProductModal({
+  initialBarcode,
+  onCreated,
+  onCancel,
+}: {
+  initialBarcode: string;
+  onCreated: (product: PosProduct, addToCart: boolean) => void;
+  onCancel: () => void;
+}) {
+  const [barcode, setBarcode] = useState(initialBarcode);
+  const [name, setName] = useState("");
+  const [category, setCategory] = useState("");
+  const [price, setPrice] = useState("");
+  const [costPrice, setCostPrice] = useState("");
+  const [costTouched, setCostTouched] = useState(false);
+  const [unit, setUnit] = useState<"PCS" | "KG">("PCS");
+  const [stock, setStock] = useState("");
+  const [looking, setLooking] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [hint, setHint] = useState<string | null>(null);
+  const [scannerOpen, setScannerOpen] = useState(false);
+
+  const priceRef = useRef<HTMLInputElement>(null);
+  const barcodeRef = useRef<HTMLInputElement>(null);
+
+  // Пришли со скана — код уже есть, сразу в цену. Пришли из «+ Товар» —
+  // начинаем со штрихкода.
+  useEffect(() => {
+    if (initialBarcode) priceRef.current?.focus();
+    else barcodeRef.current?.focus();
+  }, [initialBarcode]);
+
+  const lookup = async () => {
+    const code = barcode.trim();
+    if (!isValidBarcode(code)) { setError("Некорректный штрихкод: нужен EAN-13 или EAN-8"); return; }
+    setError(null);
+    setHint(null);
+    setLooking(true);
+    const res = await posLookupBarcodeAction(code);
+    setLooking(false);
+    if (res.ok) {
+      setName(res.name);
+      if (res.category) setCategory(res.category);
+      setHint("Нашёл ИИ — проверьте название и цену");
+    } else {
+      setError(res.error + ". Впишите название сами.");
+    }
+  };
+
+  const submit = async (addToCart: boolean) => {
+    const p = parseRuNumber(price);
+    if (!name.trim()) { setError("Укажите название"); return; }
+    if (!(p > 0)) { setError("Укажите цену"); return; }
+    setError(null);
+    setSaving(true);
+    const res = await posCreateProductAction({
+      barcode: barcode.trim(), name, category, price: p,
+      costPrice: parseRuNumber(costPrice) || 0, unit, stock: parseRuNumber(stock) || 0,
+    });
+    setSaving(false);
+    if (res.ok) onCreated(res.product, addToCart);
+    else setError(res.error);
+  };
+
+  return (
+    <Modal onCancel={onCancel}>
+      <div className="w-[min(94vw,520px)] font-app-text">
+        <h2 className="text-xl font-semibold mb-1">Новый товар</h2>
+        <p className="text-sm text-ink-soft mb-4">
+          Товара с таким штрихкодом нет в базе. Заведите его здесь — и он сразу попадёт в чек.
+        </p>
+
+        <label className="block mb-3">
+          <span className="text-sm text-ink-soft">Штрихкод</span>
+          <div className="flex gap-2">
+            <input
+              ref={barcodeRef}
+              value={barcode}
+              inputMode="numeric"
+              onChange={(e) => setBarcode(e.target.value.replace(/[^\d]/g, ""))}
+              className="flex-1 h-12 px-3 bg-paper border border-line rounded-tag font-app-mono text-base focus:border-ink"
+            />
+            <button
+              type="button"
+              onClick={() => setScannerOpen(true)}
+              className="h-12 px-4 rounded-tag border border-line text-ink-soft hover:border-ink shrink-0"
+            >
+              Скан
+            </button>
+            <button
+              type="button"
+              onClick={lookup}
+              disabled={looking || !barcode.trim()}
+              className="h-12 px-4 rounded-tag border-2 border-ink font-medium disabled:opacity-40 shrink-0"
+            >
+              {looking ? "Ищу…" : "✨ Найти по ИИ"}
+            </button>
+          </div>
+        </label>
+
+        {hint && <p className="text-fresh-text text-sm mb-2">{hint}</p>}
+
+        <label className="block mb-3">
+          <span className="text-sm text-ink-soft">Название</span>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="найдёт ИИ или впишите сами"
+            className="w-full h-12 px-3 bg-paper border border-line rounded-tag text-base focus:border-ink"
+          />
+        </label>
+
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <label className="block">
+            <span className="text-sm text-ink-soft">Цена, ₽</span>
+            <input
+              ref={priceRef}
+              value={price}
+              inputMode="decimal"
+              onChange={(e) => {
+                const v = e.target.value.replace(/[^\d.,]/g, "");
+                setPrice(v);
+                if (!costTouched) setCostPrice(defaultCost(parseRuNumber(v)));
+              }}
+              className="w-full h-12 px-3 bg-paper border border-line rounded-tag font-app-mono text-base focus:border-ink"
+            />
+          </label>
+          <label className="block">
+            <span className="text-sm text-ink-soft">Себестоимость, ₽</span>
+            <input
+              value={costPrice}
+              inputMode="decimal"
+              onChange={(e) => { setCostPrice(e.target.value.replace(/[^\d.,]/g, "")); setCostTouched(true); }}
+              className="w-full h-12 px-3 bg-paper border border-line rounded-tag font-app-mono text-base focus:border-ink"
+            />
+          </label>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3 mb-4">
+          <label className="block col-span-1">
+            <span className="text-sm text-ink-soft">Категория</span>
+            <input
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              placeholder="Прочее"
+              className="w-full h-12 px-3 bg-paper border border-line rounded-tag text-base focus:border-ink"
+            />
+          </label>
+          <label className="block col-span-1">
+            <span className="text-sm text-ink-soft">Остаток</span>
+            <input
+              value={stock}
+              inputMode="decimal"
+              placeholder="0"
+              onChange={(e) => setStock(e.target.value.replace(/[^\d.,]/g, ""))}
+              className="w-full h-12 px-3 bg-paper border border-line rounded-tag font-app-mono text-base focus:border-ink"
+            />
+          </label>
+          <div className="col-span-1">
+            <span className="text-sm text-ink-soft">Единица</span>
+            <SegmentedControl
+              fill
+              className="w-full"
+              value={unit}
+              onChange={setUnit}
+              options={[{ value: "PCS" as const, label: "шт" }, { value: "KG" as const, label: "кг" }]}
+            />
+          </div>
+        </div>
+
+        {error && <p className="text-stamp-text text-sm mb-3">{error}</p>}
+
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={onCancel}
+            className="h-14 rounded-tag border border-line text-ink-soft hover:border-ink text-base"
+          >
+            Отмена
+          </button>
+          <button
+            onClick={() => submit(true)}
+            disabled={saving}
+            className="h-14 rounded-tag bg-ink text-paper font-medium text-base disabled:opacity-40"
+          >
+            {saving ? "Сохраняем…" : "Создать и пробить"}
+          </button>
+        </div>
+        <button
+          onClick={() => submit(false)}
+          disabled={saving}
+          className="w-full h-12 mt-2 rounded-tag border border-line text-ink-soft hover:border-ink text-sm disabled:opacity-40"
+        >
+          Только завести в базу, в чек не добавлять
+        </button>
+      </div>
+
+      {scannerOpen && (
+        <BarcodeScanner
+          onScan={(code) => { setBarcode(code); setScannerOpen(false); priceRef.current?.focus(); }}
+          onClose={() => setScannerOpen(false)}
+        />
+      )}
+    </Modal>
+  );
+}
