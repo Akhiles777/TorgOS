@@ -21,7 +21,9 @@ type Row = {
   stock: number;
   // Статус распознавания: чтобы после «Сканирования ИИ» было видно, что нашли,
   // а что нужно дописать руками.
-  status: "new" | "found" | "notfound" | "exists";
+  // guess — ИИ восстановил название по бренду/производителю, точного совпадения
+  // не нашёл. Такие обязательно нужно проверить глазами, поэтому отдельный вид.
+  status: "new" | "found" | "guess" | "notfound" | "exists";
   note?: string;
 };
 
@@ -145,12 +147,19 @@ export function QuickAddScreen({ storeId }: { storeId: string }) {
           const found = byCode.get(r.barcode);
           if (!found || r.name.trim()) return r;
           if (found.found) {
+            const status = found.known ? "exists" : found.confidence === "high" ? "found" : "guess";
             return {
               ...r,
               name: found.name,
               category: found.category,
-              status: found.known ? "exists" : "found",
-              note: found.known ? "уже есть в базе — сохранить не выйдет" : undefined,
+              // Справочник знает, штучный товар или весовой — подставляем.
+              unit: found.unit ?? r.unit,
+              status,
+              note: found.known
+                ? "уже есть в базе — сохранить не выйдет"
+                : status === "guess"
+                  ? "ИИ не уверен — проверьте название"
+                  : undefined,
             };
           }
           return { ...r, status: "notfound", note: found.error };
@@ -283,18 +292,21 @@ export function QuickAddScreen({ storeId }: { storeId: string }) {
               <div
                 key={r.key}
                 className={`border rounded-tag p-3 ${
-                  r.status === "exists" || (r.status === "notfound" && !r.name.trim())
+                  r.status === "exists" || r.status === "guess" || (r.status === "notfound" && !r.name.trim())
                     ? "border-warn bg-warn/5"
                     : "border-line bg-paper-2"
                 }`}
               >
-                <div className="flex items-center gap-2 mb-2">
+                {/* flex-wrap + min-w-0: пометки бывают длинными («Внутренний код
+                    магазина — впишите название сами»), и на узком экране такая
+                    строка распирала страницу до горизонтальной прокрутки. */}
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-2">
                   <span className="font-app-mono text-xs text-ink-soft shrink-0">{r.barcode}</span>
-                  {r.status === "found" && <span className="text-xs text-fresh-text shrink-0">нашёл ИИ</span>}
-                  {r.status === "exists" && <span className="text-xs text-warn-text shrink-0">{r.note ?? "уже есть в базе"}</span>}
-                  {r.status === "notfound" && <span className="text-xs text-warn-text shrink-0">{r.note ?? "не найден"}</span>}
-                  <span className="ml-auto" />
-                  <button onClick={() => removeRow(r.key)} className="text-xs text-ink-soft hover:text-stamp-text px-2 shrink-0">
+                  {r.status === "found" && <span className="text-xs text-fresh-text min-w-0">нашёл ИИ</span>}
+                  {r.status === "guess" && <span className="text-xs text-warn-text min-w-0">{r.note ?? "ИИ не уверен"}</span>}
+                  {r.status === "exists" && <span className="text-xs text-warn-text min-w-0">{r.note ?? "уже есть в базе"}</span>}
+                  {r.status === "notfound" && <span className="text-xs text-warn-text min-w-0">{r.note ?? "не найден"}</span>}
+                  <button onClick={() => removeRow(r.key)} className="text-xs text-ink-soft hover:text-stamp-text px-2 ml-auto shrink-0">
                     убрать
                   </button>
                 </div>

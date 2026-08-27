@@ -36,11 +36,16 @@ export async function lookupBarcodesAction(barcodes: string[]): Promise<LookupRe
     const knownByCode = new Map(known.map((k) => [k.barcode!, k]));
     const unknown = clean.filter((c) => !knownByCode.has(c));
 
-    reserveAiLookups(storeId, unknown.length);
+    // Резервируем с запасом на второй, углублённый заход по ненайденным
+    // (он ограничен 15 позициями на пачку — см. barcodeLookup.ts).
+    reserveAiLookups(storeId, unknown.length + Math.min(unknown.length, 15));
     const fresh = unknown.length ? await lookupBarcodes(unknown, await storeCategories(db, storeId)) : [];
 
     const results: BarcodeLookupResult[] = [
-      ...known.map((k) => ({ barcode: k.barcode!, found: true as const, name: k.name, category: k.category, known: true as const })),
+      ...known.map((k) => ({
+        barcode: k.barcode!, found: true as const, name: k.name, category: k.category,
+        confidence: "high" as const, known: true as const,
+      })),
       ...fresh,
     ];
     return { ok: true, results };

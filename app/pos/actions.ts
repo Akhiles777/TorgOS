@@ -30,7 +30,9 @@ export async function startShiftAction(employeeId: string): Promise<ShiftResult>
 // терять покупателя в очереди. Эти два действия дают завести товар прямо с
 // кассы: сначала спросить у ИИ, что это за штрихкод, потом создать товар и
 // сразу пробить его в чек.
-export type PosLookupResult = { ok: true; name: string; category: string } | { ok: false; error: string };
+export type PosLookupResult =
+  | { ok: true; name: string; category: string; sure: boolean; unit?: "PCS" | "KG" | null }
+  | { ok: false; error: string };
 
 export async function posLookupBarcodeAction(barcode: string): Promise<PosLookupResult> {
   try {
@@ -40,13 +42,16 @@ export async function posLookupBarcodeAction(barcode: string): Promise<PosLookup
     // Если товар уже заведён (кассир набрал код руками) — платный запрос к ИИ
     // не нужен, отвечаем из своей же базы.
     const own = await db.product.findFirst({ where: { storeId, barcode: clean }, select: { name: true, category: true } });
-    if (own) return { ok: true, name: own.name, category: own.category };
+    if (own) return { ok: true, name: own.name, category: own.category, sure: true };
 
-    reserveAiLookups(storeId, 1);
+    // 2 — на случай углублённого второго захода по ненайденному.
+    reserveAiLookups(storeId, 2);
     const cats = await db.product.findMany({ where: { storeId }, select: { category: true }, distinct: ["category"] });
-    const res = await lookupBarcode(clean, cats.map((c) => c.category).filter(Boolean));
+    // tidy: false — на кассе ждать модель нельзя, справочник отвечает за
+    // доли секунды, а название приводится локальными правилами.
+    const res = await lookupBarcode(clean, cats.map((c) => c.category).filter(Boolean), { tidy: false });
     if (!res.found) return { ok: false, error: res.error };
-    return { ok: true, name: res.name, category: res.category };
+    return { ok: true, name: res.name, category: res.category, sure: res.confidence === "high", unit: res.unit };
   } catch (e) {
     if (e instanceof AiBudgetError) return { ok: false, error: e.message };
     if (e instanceof AuthError) return { ok: false, error: e.message };

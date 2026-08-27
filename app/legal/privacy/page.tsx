@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
 import { LegalLayout } from "../LegalLayout";
 
-export const metadata: Metadata = { title: "Политика конфиденциальности — ТоргОС" };
+export const metadata: Metadata = {
+  title: "Политика конфиденциальности",
+  description: "Как ТоргОС обрабатывает и защищает персональные данные пользователей сервиса.",
+  alternates: { canonical: "/legal/privacy" },
+};
 
 // ШАБЛОН для запуска без ИП/ООО — см. комментарий в app/legal/offer/page.tsx.
 export default function PrivacyPage() {

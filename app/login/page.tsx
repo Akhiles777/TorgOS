@@ -1,11 +1,16 @@
 // Шрифты приложения — та же пара, что в /pos и /admin/owner (см. дизайн-план системы).
 import "@fontsource-variable/unbounded/wght.css";
 import "@fontsource-variable/golos-text/wght.css";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { getCurrentUser } from "@/server/auth";
 import { homeFor } from "@/server/guard";
 import { redirect } from "next/navigation";
 import { LoginForm } from "./LoginForm";
+
+// Страница входа не должна попадать в выдачу: пользы для поиска нет,
+// а краулинговый бюджет она забирает.
+export const metadata: Metadata = { title: "Вход", robots: { index: false, follow: false } };
 
 export const dynamic = "force-dynamic";
 

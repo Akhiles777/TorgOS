@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
 import { LegalLayout } from "../LegalLayout";
 
-export const metadata: Metadata = { title: "Публичная оферта — ТоргОС" };
+export const metadata: Metadata = {
+  title: "Публичная оферта",
+  description: "Условия использования сервиса ТоргОС: тарифы, порядок оплаты, права и обязанности сторон.",
+  alternates: { canonical: "/legal/offer" },
+};
 
 // ШАБЛОН для запуска без ИП/ООО. Места, требующие заполнения после
 // регистрации бизнеса, отмечены <mark>[...]</mark> — видно на самой странице.

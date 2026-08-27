@@ -1,6 +1,7 @@
 // Шрифты приложения — та же пара, что в /pos, /admin/owner и /login.
 import "@fontsource-variable/unbounded/wght.css";
 import "@fontsource-variable/golos-text/wght.css";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/server/auth";
@@ -8,6 +9,12 @@ import { homeFor } from "@/server/guard";
 import { RegisterForm } from "./RegisterForm";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Регистрация — 14 дней бесплатно",
+  description: "Заведите магазин или кафе в ТоргОС за пару минут. 14 дней бесплатно, карта не нужна.",
+  alternates: { canonical: "/register" },
+};
 
 export default async function RegisterPage() {
   const user = await getCurrentUser();

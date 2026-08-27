@@ -59,7 +59,12 @@ export function QuickProductModal({
     if (res.ok) {
       setName(res.name);
       if (res.category) setCategory(res.category);
-      setHint("Нашёл ИИ — проверьте название и цену");
+      if (res.unit) setUnit(res.unit);
+      setHint(
+        res.sure
+          ? "Нашёл ИИ — проверьте название и цену"
+          : "ИИ не уверен: восстановил по бренду. Проверьте название перед сохранением",
+      );
     } else {
       setError(res.error + ". Впишите название сами.");
     }
@@ -123,7 +128,7 @@ export function QuickProductModal({
           </div>
         </div>
 
-        {hint && <p className="text-fresh-text text-sm mb-2">{hint}</p>}
+        {hint && <p className={`text-sm mb-2 ${hint.startsWith("ИИ не уверен") ? "text-warn-text" : "text-fresh-text"}`}>{hint}</p>}
 
         <label className="block mb-3">
           <span className="text-sm text-ink-soft">Название</span>

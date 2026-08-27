@@ -81,7 +81,8 @@ export async function lookupBarcodeAction(barcode: string): Promise<{ ok: true; 
     const own = await db.product.findFirst({ where: { storeId, barcode: clean }, select: { name: true, category: true } });
     if (own) return { ok: true, name: own.name, category: own.category };
 
-    reserveAiLookups(storeId, 1);
+    // 2 — на случай углублённого второго захода по ненайденному.
+    reserveAiLookups(storeId, 2);
     const rows = await db.product.findMany({ where: { storeId }, select: { category: true }, distinct: ["category"] });
     const result = await lookupBarcode(clean, rows.map((r) => r.category).filter(Boolean));
     if (!result.found) return { ok: false, error: `${result.error}. Впишите название сами.` };
