@@ -36,6 +36,8 @@ export function QuickProductModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
+  // Другие написания из справочников — кассир выбирает нужное одним тапом.
+  const [alternatives, setAlternatives] = useState<string[]>([]);
   const [scannerOpen, setScannerOpen] = useState(false);
 
   const priceRef = useRef<HTMLInputElement>(null);
@@ -60,10 +62,17 @@ export function QuickProductModal({
       setName(res.name);
       if (res.category) setCategory(res.category);
       if (res.unit) setUnit(res.unit);
+      setAlternatives(res.alternatives ?? []);
       setHint(
-        res.sure
-          ? "Нашёл ИИ — проверьте название и цену"
-          : "ИИ не уверен: восстановил по бренду. Проверьте название перед сохранением",
+        res.verified
+          ? "Название совпало в двух справочниках — проверьте цену"
+          : res.inTwoSources
+            ? "Штрихкод есть в двух справочниках — сверьте название с упаковкой"
+            : res.fromWeb
+              ? "ИИ не уверен: сверьте название с упаковкой перед сохранением"
+              : res.sure
+                ? "Нашёл — проверьте название и цену"
+                : "ИИ не уверен: сверьте название с упаковкой перед сохранением",
       );
     } else {
       setError(res.error + ". Впишите название сами.");
@@ -138,6 +147,21 @@ export function QuickProductModal({
             placeholder="найдёт ИИ или впишите сами"
             className="w-full h-12 px-3 bg-paper border border-line rounded-tag text-base focus:border-ink"
           />
+          {alternatives.length > 0 && (
+            <span className="flex flex-wrap gap-1.5 mt-1.5">
+              <span className="text-xs text-ink-soft self-center">ещё варианты:</span>
+              {alternatives.map((alt) => (
+                <button
+                  key={alt}
+                  type="button"
+                  onClick={() => setName(alt)}
+                  className="text-xs px-2 py-1 rounded-tag border border-line bg-paper hover:border-ink text-left"
+                >
+                  {alt}
+                </button>
+              ))}
+            </span>
+          )}
         </label>
 
         <div className="grid grid-cols-2 gap-3 mb-3">

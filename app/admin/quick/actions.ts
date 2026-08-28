@@ -44,7 +44,7 @@ export async function lookupBarcodesAction(barcodes: string[]): Promise<LookupRe
     const results: BarcodeLookupResult[] = [
       ...known.map((k) => ({
         barcode: k.barcode!, found: true as const, name: k.name, category: k.category,
-        confidence: "high" as const, known: true as const,
+        confidence: "high" as const, known: true as const, alternatives: [] as string[],
       })),
       ...fresh,
     ];

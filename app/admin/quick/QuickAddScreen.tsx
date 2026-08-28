@@ -25,6 +25,12 @@ type Row = {
   // не нашёл. Такие обязательно нужно проверить глазами, поэтому отдельный вид.
   status: "new" | "found" | "guess" | "notfound" | "exists";
   note?: string;
+  // Другие написания того же товара из справочников — выбираются одним тапом.
+  alternatives?: string[];
+  // Названия из двух справочников совпали по смыслу.
+  verified?: boolean;
+  // Штрихкод найден в двух независимых справочниках.
+  inTwoSources?: boolean;
 };
 
 const STORAGE_PREFIX = "torgos:quickadd:";
@@ -48,7 +54,10 @@ function sanitizeRow(raw: unknown): Row | null {
   const r = raw as Record<string, unknown>;
   const barcode = String(r.barcode ?? "").trim();
   if (!barcode) return null;
-  const status = r.status === "found" || r.status === "notfound" ? r.status : "new";
+  const KNOWN_STATUSES = ["found", "guess", "notfound", "exists"] as const;
+  const status = (KNOWN_STATUSES as readonly string[]).includes(String(r.status))
+    ? (r.status as Row["status"])
+    : "new";
   return {
     key: typeof r.key === "string" && r.key ? r.key : nextKey(),
     barcode,
@@ -60,6 +69,9 @@ function sanitizeRow(raw: unknown): Row | null {
     stock: num(r.stock),
     status,
     note: typeof r.note === "string" ? r.note : undefined,
+    alternatives: Array.isArray(r.alternatives) ? r.alternatives.filter((x): x is string => typeof x === "string").slice(0, 4) : [],
+    verified: r.verified === true,
+    inTwoSources: r.inTwoSources === true,
   };
 }
 
@@ -147,18 +159,30 @@ export function QuickAddScreen({ storeId }: { storeId: string }) {
           const found = byCode.get(r.barcode);
           if (!found || r.name.trim()) return r;
           if (found.found) {
-            const status = found.known ? "exists" : found.confidence === "high" ? "found" : "guess";
+            // Найденное ТОЛЬКО ИИ-поиском всегда просим проверить: справочник —
+            // это данные, а ответ модели — предположение. Живой прогон поймал
+            // уверенно неверное название на импортном штрихкоде.
+            const status = found.known
+              ? "exists"
+              : found.source === "web" || found.confidence !== "high"
+                ? "guess"
+                : "found";
             return {
               ...r,
               name: found.name,
               category: found.category,
               // Справочник знает, штучный товар или весовой — подставляем.
               unit: found.unit ?? r.unit,
+              alternatives: found.alternatives ?? [],
+              verified: found.verified ?? false,
+              inTwoSources: found.inTwoSources ?? false,
               status,
               note: found.known
                 ? "уже есть в базе — сохранить не выйдет"
                 : status === "guess"
-                  ? "ИИ не уверен — проверьте название"
+                  ? (found.source === "web"
+                      ? "нашёл ИИ в интернете — сверьте с упаковкой"
+                      : "ИИ не уверен — проверьте название")
                   : undefined,
             };
           }
@@ -302,7 +326,15 @@ export function QuickAddScreen({ storeId }: { storeId: string }) {
                     строка распирала страницу до горизонтальной прокрутки. */}
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-2">
                   <span className="font-app-mono text-xs text-ink-soft shrink-0">{r.barcode}</span>
-                  {r.status === "found" && <span className="text-xs text-fresh-text min-w-0">нашёл ИИ</span>}
+                  {r.status === "found" && (
+                    <span className="text-xs text-fresh-text min-w-0">
+                      {r.verified
+                        ? "название совпало в 2 справочниках"
+                        : r.inTwoSources
+                          ? "есть в 2 справочниках"
+                          : "нашёл ИИ"}
+                    </span>
+                  )}
                   {r.status === "guess" && <span className="text-xs text-warn-text min-w-0">{r.note ?? "ИИ не уверен"}</span>}
                   {r.status === "exists" && <span className="text-xs text-warn-text min-w-0">{r.note ?? "уже есть в базе"}</span>}
                   {r.status === "notfound" && <span className="text-xs text-warn-text min-w-0">{r.note ?? "не найден"}</span>}
@@ -316,6 +348,24 @@ export function QuickAddScreen({ storeId }: { storeId: string }) {
                   placeholder="Название — заполнит ИИ или впишите сами"
                   className="w-full h-10 px-2 mb-2 bg-paper border border-line rounded-tag font-medium focus:border-ink"
                 />
+                {/* Справочники обычно знают несколько написаний одного товара.
+                    Показываем их: нажать нужное быстрее и надёжнее, чем
+                    вычитывать и править одно навязанное название. */}
+                {(r.alternatives?.length ?? 0) > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    <span className="text-xs text-ink-soft self-center">ещё варианты:</span>
+                    {r.alternatives!.map((alt) => (
+                      <button
+                        key={alt}
+                        type="button"
+                        onClick={() => patch(r.key, { name: alt })}
+                        className="text-xs px-2 py-1 rounded-tag border border-line bg-paper hover:border-ink text-left"
+                      >
+                        {alt}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {/* Телефон: категория на всю ширину, остальное сеткой 2×2.
                     sm:contents растворяет обёртку, и на планшете/десктопе все
                     пять полей встают в один ряд, как раньше. */}

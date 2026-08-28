@@ -21,6 +21,9 @@ export type BarcodeDbEntry = {
   unit: "PCS" | "KG" | null;
   // Сколько магазинов сообщили это название: чем больше, тем достовернее.
   rating: number;
+  // Какой источник дал запись. Совпадение из двух независимых источников —
+  // сильный признак, что название верное (см. lookupFreeSources).
+  origin: "ru" | "off";
 };
 
 const cache = new Map<string, { at: number; entries: BarcodeDbEntry[] }>();
@@ -53,6 +56,9 @@ function stripArticle(token: string): string | null {
   if (worded) return worded[1];
   // Короткая буквенная приставка с номером — не слово, это код.
   if (/^[А-ЯЁA-Z]{1,2}\d{3,}$/u.test(t)) return null;
+  // Отдельно стоящее длинное число — артикул («7326 ТЕТРАДЬ ШКОЛЬНАЯ»).
+  // Количества на ценнике короче: «12 листов», «0,33 л», «96 л».
+  if (/^\d{4,}$/.test(t)) return null;
   // Смесь букв и цифр, начинающаяся с цифры внутри — тоже код (Т5СК12).
   if (/^[А-ЯЁA-Z]?\d[А-ЯЁA-Z\d]{4,}$/u.test(t)) return null;
   return token;
@@ -123,7 +129,7 @@ export function parseBarcodeListHtml(html: string, barcode: string): BarcodeDbEn
     const unit = rawUnit.startsWith("ШТ") ? "PCS" : rawUnit.startsWith("КГ") ? "KG" : null;
     const rating = Number.parseInt(cells[4] ?? "", 10);
 
-    entries.push({ name, unit, rating: Number.isFinite(rating) ? rating : 0 });
+    entries.push({ name, unit, rating: Number.isFinite(rating) ? rating : 0, origin: "ru" });
   }
 
   // Самые «подтверждённые» названия — первыми.
@@ -156,6 +162,110 @@ export function guessCategory(name: string, storeCategories: string[] = []): str
   const guess = hit[1];
   const norm = (s: string) => s.toLowerCase().replace(/ё/g, "е").replace(/[^а-яa-z0-9]/gi, "");
   return storeCategories.find((c) => norm(c) === norm(guess)) ?? guess;
+}
+
+// ── Второй бесплатный источник: Open Food Facts ──────────────────────────
+// Международная открытая база (плюс её сёстры по косметике и непродовольствию).
+// Закрывает ровно ту дыру, где российский справочник бессилен: импортная еда и
+// косметика. Проверено вживую: Nutella и Coca-Cola там есть с брендом и
+// объёмом, российской канцелярии нет — источники дополняют друг друга.
+const OFF_HOSTS = [
+  "world.openfoodfacts.org",
+  "world.openbeautyfacts.org",
+  "world.openproductsfacts.org",
+];
+
+type OffProduct = {
+  product_name?: string;
+  product_name_ru?: string;
+  brands?: string;
+  quantity?: string;
+};
+
+function offName(p: OffProduct): string {
+  const base = (p.product_name_ru || p.product_name || "").trim();
+  if (!base) return "";
+  const brand = (p.brands || "").split(",")[0]?.trim() ?? "";
+  const qty = (p.quantity || "").trim();
+  const parts: string[] = [];
+  // Бренд добавляем только если его ещё нет в названии — иначе выходит
+  // «Nutella Nutella».
+  if (brand && !base.toLowerCase().includes(brand.toLowerCase())) parts.push(brand);
+  parts.push(base);
+  if (qty && !base.toLowerCase().includes(qty.toLowerCase())) parts.push(qty);
+  return parts.join(" ").replace(/\s+/g, " ").trim();
+}
+
+async function lookupOpenFacts(barcode: string): Promise<BarcodeDbEntry[]> {
+  const fields = "product_name,product_name_ru,brands,quantity";
+  const results = await Promise.all(
+    OFF_HOSTS.map(async (host) => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+      try {
+        const res = await fetch(`https://${host}/api/v2/product/${encodeURIComponent(barcode)}.json?fields=${fields}`, {
+          signal: controller.signal,
+          headers: { "User-Agent": "TorgOS/1.0 (+https://torgos.ru)" },
+        });
+        if (!res.ok) return null;
+        const data = (await res.json()) as { status?: number; product?: OffProduct };
+        if (data.status !== 1 || !data.product) return null;
+        const name = offName(data.product);
+        return name ? ({ name, unit: null, rating: 5, origin: "off" } as BarcodeDbEntry) : null;
+      } catch {
+        return null;
+      } finally {
+        clearTimeout(timer);
+      }
+    }),
+  );
+  return results.filter((r): r is BarcodeDbEntry => r !== null);
+}
+
+// Для сверки источников: «Nutella Ferrero 400 g» и «Ferrero Nutella, 400 г» —
+// одно и то же. Сравниваем по набору значимых слов, а не посимвольно.
+function nameKey(name: string): Set<string> {
+  return new Set(
+    name
+      .toLowerCase()
+      .replace(/ё/g, "е")
+      .split(/[^а-яa-z0-9]+/i)
+      .filter((w) => w.length > 2),
+  );
+}
+
+export function namesAgree(a: string, b: string): boolean {
+  const [x, y] = [nameKey(a), nameKey(b)];
+  if (!x.size || !y.size) return false;
+  let common = 0;
+  for (const w of x) if (y.has(w)) common++;
+  // Половина слов меньшего названия должна найтись в большем.
+  return common >= Math.max(1, Math.ceil(Math.min(x.size, y.size) / 2));
+}
+
+export type FreeLookup = {
+  entries: BarcodeDbEntry[];
+  // Штрихкод нашёлся в двух независимых справочниках. Это подтверждает, что
+  // товар существует и номер не выдуман. Само НАЗВАНИЕ при этом может быть
+  // записано по-разному («КОКА-КОЛА Ж.Б 0.33 Л.» и «Coca-Cola 330 ml»),
+  // поэтому в интерфейсе так и пишем — «есть в двух справочниках», а не
+  // «название подтверждено».
+  inTwoSources: boolean;
+  // Названия из разных источников совпали и по смыслу — самый сильный признак.
+  namesMatch: boolean;
+  origins: ("ru" | "off")[];
+};
+
+// Оба бесплатных источника разом. Ни один из них не стоит денег, поэтому
+// спрашиваем всегда и параллельно — до платного ИИ-поиска дело доходит,
+// только если оба промолчали.
+export async function lookupFreeSources(barcode: string): Promise<FreeLookup> {
+  const [ru, off] = await Promise.all([lookupBarcodeDb(barcode), lookupOpenFacts(barcode)]);
+  const entries = [...ru, ...off];
+  const inTwoSources = ru.length > 0 && off.length > 0;
+  const namesMatch = inTwoSources && ru.some((r) => off.some((o) => namesAgree(r.name, o.name)));
+  const origins = [...new Set(entries.map((e) => e.origin))];
+  return { entries, inTwoSources, namesMatch, origins };
 }
 
 // Какой из вариантов справочника показать человеку. Один рейтинг —

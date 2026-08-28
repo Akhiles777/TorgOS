@@ -16,7 +16,34 @@
 // второй, более сильный заход.
 import { chatComplete, AiUnavailableError } from "./routerai";
 import { describeGs1 } from "@/lib/gs1Prefix";
-import { lookupBarcodeDb, tidyDbName, pickBestEntry, guessCategory, type BarcodeDbEntry } from "@/server/services/barcodeDb";
+import {
+  lookupFreeSources, tidyDbName, pickBestEntry, guessCategory, type BarcodeDbEntry, type FreeLookup,
+} from "@/server/services/barcodeDb";
+
+// Сколько запасных написаний показывать человеку под полем названия.
+const MAX_ALTERNATIVES = 4;
+
+// Уникальные, приведённые к виду ценника варианты названия — кроме уже
+// выбранного. Дают исправить неверный вариант одним нажатием, без ИИ.
+function buildAlternatives(entries: BarcodeDbEntry[], chosen: string): string[] {
+  const seen = new Set([chosen.toLowerCase()]);
+  const out: string[] = [];
+  // Сначала — по одному лучшему варианту из каждого источника: иначе четыре
+  // слота занимали похожие написания из российского справочника, и название
+  // из Open Food Facts («Coca-Cola 330 ml») до человека не доходило вовсе.
+  const byOrigin = new Map<string, BarcodeDbEntry>();
+  for (const e of entries) if (!byOrigin.has(e.origin)) byOrigin.set(e.origin, e);
+  const ordered = [...byOrigin.values(), ...entries];
+  for (const e of ordered) {
+    const name = e.origin === "off" ? e.name : tidyDbName(e.name);
+    const key = name.toLowerCase();
+    if (!name || seen.has(key)) continue;
+    seen.add(key);
+    out.push(name);
+    if (out.length >= MAX_ALTERNATIVES) break;
+  }
+  return out;
+}
 
 // Причёсывание названия из справочника. Веб-поиск тут не нужен — товар уже
 // известен, надо лишь превратить «ТЕТР 12Л КОСАЯ . МОИ ЗАНЯТИЯ.» в строку для
@@ -56,6 +83,14 @@ export type BarcodeLookupResult =
       unit?: "PCS" | "KG" | null;
       // Откуда взято: бесплатный справочник, платный поиск или своя база.
       source?: "db" | "web" | "own";
+      // Другие написания того же товара из справочников. Человек выбирает
+      // нужное одним нажатием — это надёжнее, чем доверять одному варианту.
+      alternatives?: string[];
+      // Названия из двух справочников совпали по смыслу.
+      verified?: boolean;
+      // Штрихкод найден в двух независимых справочниках (написания могут
+      // отличаться) — товар точно существует.
+      inTwoSources?: boolean;
       known?: true;
     }
   | { barcode: string; found: false; error: string };
@@ -72,6 +107,23 @@ function resolveCategory(raw: string, categories: string[]): string {
   const norm = (s: string) => s.toLowerCase().replace(/ё/g, "е").replace(/[^а-яa-z0-9]/gi, "");
   const hit = categories.find((c) => norm(c) === norm(clean));
   return hit ?? clean.slice(0, 40);
+}
+
+// Порядок предпочтения: уже существующая категория магазина → широкая группа
+// из словаря → то, что придумала модель. Так справочник категорий не
+// расползается на «паста», «Тетради», «Газировка» рядом с готовыми группами.
+function resolveCategoryPreferKnown(raw: string, name: string, categories: string[]): string {
+  const clean = raw.trim().replace(/\s+/g, " ");
+  const norm = (s: string) => s.toLowerCase().replace(/ё/g, "е").replace(/[^а-яa-z0-9]/gi, "");
+  if (clean) {
+    const known = categories.find((c) => norm(c) === norm(clean));
+    if (known) return known;
+  }
+  const guessed = guessCategory(name, categories);
+  if (guessed) return guessed;
+  if (!clean) return "Прочее";
+  const capped = clean.slice(0, 40);
+  return capped.charAt(0).toUpperCase() + capped.slice(1);
 }
 
 function categoryLine(categories: string[]): string {
@@ -178,7 +230,9 @@ async function askModel(barcode: string, categories: string[], deep: boolean): P
     // resolveCategory: если модель назвала существующую категорию с иным
     // написанием — подставляем то, что уже в базе, чтобы не плодить дубли.
     // Если категории не дала вовсе — пробуем угадать по названию словарём.
-    category: category ? resolveCategory(category, categories) : (guessCategory(name, categories) ?? "Прочее"),
+    // Существующую категорию магазина — как есть; иначе широкая группа из
+    // словаря, и только если и её нет — то, что назвала модель.
+    category: resolveCategoryPreferKnown(category, name, categories),
     confidence: parsed.confidence === "high" ? "high" : "low",
   };
 }
@@ -189,10 +243,11 @@ async function askModel(barcode: string, categories: string[], deep: boolean): P
 // находку: отдаём лучший вариант справочника как есть, человек поправит.
 async function tidyFromDb(
   barcode: string,
-  entries: BarcodeDbEntry[],
+  free: FreeLookup,
   categories: string[],
   useAi: boolean,
 ): Promise<BarcodeLookupResult> {
+  const entries = free.entries;
   const best = pickBestEntry(entries) ?? entries[0];
   // Локальный результат готов всегда и мгновенно — он же ответ для кассы.
   // Категорию угадываем словарём: без него товар из справочника уходил в
@@ -202,6 +257,9 @@ async function tidyFromDb(
     barcode, found: true, name: localName,
     category: guessCategory(localName, categories) ?? "Прочее",
     confidence: "high", unit: best.unit, source: "db",
+    alternatives: buildAlternatives(entries, localName),
+    verified: free.namesMatch,
+    inTwoSources: free.inTwoSources,
   };
   if (!useAi) return local;
   const list = entries.slice(0, 6).map((e, i) => `${i + 1}. ${e.name}`).join("\n");
@@ -239,19 +297,27 @@ async function tidyFromDb(
       // «Бакалею»). Поэтому отсутствие индекса проверяем до приведения к числу.
       const rawIdx = parsed.categoryIndex;
       const idx = rawIdx === null || rawIdx === undefined || rawIdx === "" ? NaN : Number(rawIdx);
+      const tidyName = name.charAt(0).toUpperCase() + name.slice(1);
+      // Если модель выбрала существующую категорию магазина — верим ей.
+      // Если предложила новую, сначала пробуем словарь широких групп: модель
+      // склонна дробить справочник узкими выдумками («паста», «Тетради»)
+      // вместо «Конфеты и сладости» и «Канцелярия», которые уже есть.
       const category = Number.isInteger(idx) && idx >= 0 && idx < catList.length
         ? catList[idx]
-        : resolveCategory(String(parsed.newCategory ?? ""), categories);
+        : guessCategory(tidyName, categories) ?? resolveCategory(String(parsed.newCategory ?? ""), categories);
       return {
         barcode,
         found: true,
         // Модель нередко отвечает со строчной буквы — приводим к виду ценника.
-        name: name.charAt(0).toUpperCase() + name.slice(1),
+        name: tidyName,
         category,
         // high: товар реально найден в справочнике по этому самому номеру.
         confidence: "high",
         unit: best.unit,
         source: "db",
+        alternatives: buildAlternatives(entries, name),
+        verified: free.namesMatch,
+        inTwoSources: free.inTwoSources,
       };
     }
   } catch {
@@ -279,8 +345,8 @@ export async function lookupBarcode(
 
   // Шаг 1 — бесплатный справочник. Для российских товаров срабатывает чаще
   // всего и стоит 0 ₽; платный поиск дальше уже не нужен.
-  const db = await lookupBarcodeDb(barcode);
-  if (db.length) return tidyFromDb(barcode, db, categories, useAiTidy);
+  const free = await lookupFreeSources(barcode);
+  if (free.entries.length) return tidyFromDb(barcode, free, categories, useAiTidy);
 
   // Шаг 2 — платный поиск в интернете.
   const fast = await askModel(barcode, categories, false);
@@ -307,8 +373,8 @@ export async function lookupBarcodes(barcodes: string[], categories: string[]): 
           }
           // Бесплатный справочник первым — на российской номенклатуре он
           // закрывает большую часть пачки, не потратив ни копейки.
-          const db = await lookupBarcodeDb(code);
-          if (db.length) return tidyFromDb(code, db, categories, true);
+          const free = await lookupFreeSources(code);
+          if (free.entries.length) return tidyFromDb(code, free, categories, true);
 
           const fast = await askModel(code, categories, false);
           if (fast.found) return { ...fast, source: "web" };

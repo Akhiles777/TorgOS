@@ -31,7 +31,18 @@ export async function startShiftAction(employeeId: string): Promise<ShiftResult>
 // кассы: сначала спросить у ИИ, что это за штрихкод, потом создать товар и
 // сразу пробить его в чек.
 export type PosLookupResult =
-  | { ok: true; name: string; category: string; sure: boolean; unit?: "PCS" | "KG" | null }
+  | {
+      ok: true; name: string; category: string; sure: boolean;
+      unit?: "PCS" | "KG" | null;
+      // Другие написания из справочников — кассир выбирает нужное тапом.
+      alternatives?: string[];
+      // Названия из двух справочников совпали по смыслу.
+      verified?: boolean;
+      // Штрихкод найден в двух независимых справочниках.
+      inTwoSources?: boolean;
+      // Название пришло только из ИИ-поиска — его обязательно надо сверить.
+      fromWeb?: boolean;
+    }
   | { ok: false; error: string };
 
 export async function posLookupBarcodeAction(barcode: string): Promise<PosLookupResult> {
@@ -51,7 +62,11 @@ export async function posLookupBarcodeAction(barcode: string): Promise<PosLookup
     // доли секунды, а название приводится локальными правилами.
     const res = await lookupBarcode(clean, cats.map((c) => c.category).filter(Boolean), { tidy: false });
     if (!res.found) return { ok: false, error: res.error };
-    return { ok: true, name: res.name, category: res.category, sure: res.confidence === "high", unit: res.unit };
+    return {
+      ok: true, name: res.name, category: res.category, sure: res.confidence === "high",
+      unit: res.unit, alternatives: res.alternatives ?? [], verified: res.verified ?? false,
+      inTwoSources: res.inTwoSources ?? false, fromWeb: res.source === "web",
+    };
   } catch (e) {
     if (e instanceof AiBudgetError) return { ok: false, error: e.message };
     if (e instanceof AuthError) return { ok: false, error: e.message };

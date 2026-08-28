@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseBarcodeListHtml, tidyDbName, guessCategory } from "./services/barcodeDb";
+import { parseBarcodeListHtml, tidyDbName, guessCategory, namesAgree } from "./services/barcodeDb";
 
 // Разметка — сокращённая копия реальной страницы barcode-list.ru
 // (проверено на живых штрихкодах владельца 4690326205195 / 4680088479224).
@@ -75,5 +75,18 @@ describe("категория по названию (словарь, без ИИ)
   it("молчит, когда не уверен — лучше «Прочее», чем неверная категория", () => {
     expect(guessCategory("Ерунда без опознавательных знаков")).toBeNull();
     expect(guessCategory("")).toBeNull();
+  });
+});
+
+describe("варианты из разных источников", () => {
+  it("убирает отдельно стоящий артикул, но сохраняет количество", () => {
+    expect(tidyDbName("7326 ТЕТРАДЬ ШКОЛЬНАЯ А5 12Л")).toBe("Тетрадь школьная а5 12 л");
+    expect(tidyDbName("ТЕТРАДЬ 12 ЛИСТОВ")).toBe("Тетрадь 12 листов");
+  });
+
+  it("считает совпадением разные написания одного названия", () => {
+    expect(namesAgree("Ferrero Nutella паста 400 г", "Nutella паста ореховая 400 г")).toBe(true);
+    expect(namesAgree("Тетрадь 12 листов", "Порошок стиральный 3 кг")).toBe(false);
+    expect(namesAgree("", "Тетрадь")).toBe(false);
   });
 });
