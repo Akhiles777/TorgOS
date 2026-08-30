@@ -13,7 +13,13 @@ export type ReceiptRow = {
   cashier: string;
   createdAt: string;
   itemCount: number;
-  items: { name: string; quantity: number; unit: Unit; priceAtSale: number }[];
+  // Сколько денег по этому чеку уже вернули (0 — возвратов не было).
+  returnedTotal: number;
+  // Возврат делается по конкретной строке чека, поэтому нужен её id и то,
+  // сколько из неё уже вернули.
+  items: {
+    id: string; name: string; quantity: number; unit: Unit; priceAtSale: number; returnedQty: number;
+  }[];
 };
 
 export async function listReceiptsForDay(db: TenantDb, storeId: string, day?: Date) {
@@ -25,10 +31,15 @@ export async function listReceiptsForDay(db: TenantDb, storeId: string, day?: Da
     where: { storeId, createdAt: { gte: start, lt: end } },
     orderBy: { createdAt: "desc" },
     select: {
-      id: true, number: true, total: true, paymentMethod: true, createdAt: true,
+      id: true, number: true, total: true, paymentMethod: true, createdAt: true, returnedTotal: true,
       cashier: { select: { name: true } },
       employee: { select: { name: true } },
-      items: { select: { quantity: true, priceAtSale: true, product: { select: { name: true, unit: true } } } },
+      items: {
+        select: {
+          id: true, quantity: true, priceAtSale: true, returnedQty: true,
+          product: { select: { name: true, unit: true } },
+        },
+      },
     },
   });
 
@@ -36,16 +47,25 @@ export async function listReceiptsForDay(db: TenantDb, storeId: string, day?: Da
     id: s.id, number: s.number, total: toNum(s.total), paymentMethod: s.paymentMethod,
     // Показываем, кто был на смене; если смена не выбиралась — логин-аккаунт.
     cashier: s.employee?.name ?? s.cashier.name, createdAt: s.createdAt.toISOString(), itemCount: s.items.length,
-    items: s.items.map((i) => ({ name: i.product.name, quantity: toNum(i.quantity), unit: i.product.unit, priceAtSale: toNum(i.priceAtSale) })),
+    returnedTotal: toNum(s.returnedTotal),
+    items: s.items.map((i) => ({
+      id: i.id, name: i.product.name, quantity: toNum(i.quantity), unit: i.product.unit,
+      priceAtSale: toNum(i.priceAtSale), returnedQty: toNum(i.returnedQty),
+    })),
   }));
 
+  // Итоги дня считаем ЗА ВЫЧЕТОМ возвратов: в кассе к концу дня лежит именно
+  // столько. Отдельной строкой показываем, сколько вернули, — иначе разница
+  // между «пробито» и «в кассе» выглядит как ошибка.
   const totals = rows.reduce(
     (acc, r) => {
-      acc.sum += r.total; acc.count += 1;
-      acc[r.paymentMethod] += r.total;
+      const net = r.total - r.returnedTotal;
+      acc.sum += net; acc.count += 1;
+      acc.returned += r.returnedTotal;
+      acc[r.paymentMethod] += net;
       return acc;
     },
-    { sum: 0, count: 0, CASH: 0, CARD: 0, TRANSFER: 0 } as { sum: number; count: number; CASH: number; CARD: number; TRANSFER: number },
+    { sum: 0, count: 0, returned: 0, CASH: 0, CARD: 0, TRANSFER: 0 },
   );
   return { rows, totals };
 }

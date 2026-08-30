@@ -44,6 +44,8 @@ export default async function PosPage() {
       employees={employees}
       currentShift={currentShift}
       impersonating={user.impersonating}
+      // Ключ локального черновика чека: у разных точек свои незакрытые чеки.
+      storeId={storeId}
     />
   );
 }

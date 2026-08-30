@@ -14,9 +14,17 @@ export const metadata: Metadata = { title: "Вход", robots: { index: false, f
 
 export const dynamic = "force-dynamic";
 
-export default async function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string }>;
+}) {
   const user = await getCurrentUser();
   if (user) redirect(homeFor(user.role));
+  // Только внутренние адреса: «next» приходит из строки браузера, и уводить
+  // по нему на чужой сайт после входа нельзя.
+  const raw = (await searchParams).next ?? "";
+  const next = raw.startsWith("/") && !raw.startsWith("//") ? raw : "";
   return (
     <div className="min-h-[100dvh] grid place-items-center p-4 font-app-text">
       <div className="w-[min(92vw,400px)]">
@@ -25,7 +33,7 @@ export default async function LoginPage() {
           <p className="text-ink-soft text-sm mt-1">Касса и учёт магазина</p>
         </div>
         <div className="bg-paper-2 border border-line rounded-tag p-6 receipt-torn">
-          <LoginForm />
+          <LoginForm next={next} />
         </div>
         <p className="text-center text-sm text-ink-soft mt-5">
           Нет аккаунта?{" "}

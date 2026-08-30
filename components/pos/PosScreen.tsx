@@ -37,19 +37,33 @@ const nextKey = () => `l${++keyCounter}`;
 
 type ShiftEmployee = { id: string; name: string };
 
+// Незакрытый чек переживает перезагрузку страницы. Причина простая: касса
+// живёт весь день в одной вкладке на планшете, и случайное обновление (или
+// падение Wi-Fi, или автообновление браузера) не должно стирать набранное при
+// покупателе. Храним локально в этом браузере и только до оплаты.
+const CART_KEY_PREFIX = "torgos:pos:cart:";
+// Черновик старше этого срока не восстанавливаем: чек вчерашнего дня
+// возвращать на экран нельзя — его давно пробили или отменили.
+const CART_TTL_MS = 12 * 60 * 60 * 1000;
+
+type StoredCart = { at: number; lines: CartLine[] };
+
 export function PosScreen({
   initialProducts,
   accountName,
   employees,
   currentShift,
   impersonating,
+  storeId,
 }: {
   initialProducts: PosProduct[];
   accountName: string;
   employees: ShiftEmployee[];
   currentShift: ShiftEmployee | null;
   impersonating?: boolean;
+  storeId: string;
 }) {
+  const cartKey = CART_KEY_PREFIX + storeId;
   // Список товаров пополняется прямо с кассы (заведение неизвестного
   // штрихкода), поэтому это состояние, а не константа.
   const [products, setProducts] = useState(initialProducts);
@@ -57,6 +71,10 @@ export function PosScreen({
     Object.fromEntries(initialProducts.map((p) => [p.id, p.stock])),
   );
   const [cart, setCart] = useState<CartLine[]>([]);
+  // Пока черновик не прочитан, не пишем в хранилище: пустой первый рендер
+  // затёр бы сохранённый чек.
+  const [cartLoaded, setCartLoaded] = useState(false);
+  const [restoredNote, setRestoredNote] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>({ t: "idle" });
   const [flash, setFlash] = useState<Flash>(null);
   const [search, setSearch] = useState("");
@@ -76,6 +94,53 @@ export function PosScreen({
   useEffect(() => {
     setScanUrl(`${location.origin}/pos/scan`);
   }, []);
+
+  // Восстановление незакрытого чека. Строки сверяем с текущим каталогом:
+  // товар мог быть удалён или снят с продажи, пока вкладка была закрыта, —
+  // такую строку тихо оставлять нельзя, оплата по ней всё равно не пройдёт.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(cartKey);
+      if (raw) {
+        const saved = JSON.parse(raw) as StoredCart;
+        if (saved && Array.isArray(saved.lines) && Date.now() - saved.at < CART_TTL_MS) {
+          const known = new Set(initialProducts.map((p) => p.id));
+          const alive = saved.lines.filter(
+            (l) => l && typeof l.productId === "string" && known.has(l.productId) && Number(l.quantity) > 0,
+          );
+          const dropped = saved.lines.length - alive.length;
+          if (alive.length) {
+            // Ключи строк перевыдаём: счётчик после перезагрузки начинается
+            // заново, и сохранённые ключи могли бы совпасть с новыми.
+            setCart(alive.map((l) => ({ ...l, key: nextKey(), quantity: Number(l.quantity) })));
+            setRestoredNote(
+              dropped > 0
+                ? `Чек восстановлен · ${dropped} позиц. пропущено (товара больше нет)`
+                : "Чек восстановлен после перезагрузки",
+            );
+          } else if (dropped > 0) {
+            setRestoredNote("Сохранённый чек не восстановлен — этих товаров больше нет");
+          }
+        }
+      }
+    } catch {
+      // Повреждённый черновик — не повод не открыть кассу.
+    }
+    setCartLoaded(true);
+    // Один раз на монтировании: initialProducts приходят с сервера и в рамках
+    // одной загрузки страницы не меняются.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cartKey]);
+
+  useEffect(() => {
+    if (!cartLoaded) return;
+    try {
+      if (cart.length) localStorage.setItem(cartKey, JSON.stringify({ at: Date.now(), lines: cart } as StoredCart));
+      else localStorage.removeItem(cartKey);
+    } catch {
+      // Приватный режим или переполнение — чек просто не переживёт перезагрузку.
+    }
+  }, [cart, cartLoaded, cartKey]);
 
   const scannerRef = useRef<HTMLInputElement>(null);
   const scanBuf = useRef("");
@@ -181,6 +246,7 @@ export function PosScreen({
   const clearCart = useCallback(() => {
     setCart([]);
     setSearch("");
+    setRestoredNote(null);
   }, []);
 
   // ИИ-поиск товара (нечёткий, с опечатками) — возвращает id подходящих.
@@ -391,6 +457,15 @@ export function PosScreen({
           </button>
         </footer>
       </main>
+
+      {restoredNote && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 px-4 py-2.5 rounded-tag border border-line bg-paper shadow-lg text-sm flex items-center gap-3">
+          <span>{restoredNote}</span>
+          <button onClick={() => setRestoredNote(null)} className="text-ink-soft hover:text-ink" aria-label="Скрыть">
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Флеш-уведомление сканера — различимо боковым зрением */}
       {flash && (

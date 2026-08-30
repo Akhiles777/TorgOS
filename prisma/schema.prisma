@@ -304,6 +304,11 @@ model Sale {
   debtorName    String?
   debtorContact String?
   debtPaidAt    DateTime?
+  // Возвраты. Сумма возвращённых по этому чеку денег: чек не удаляется и не
+  // переписывается — история продаж должна оставаться неизменной, а возврат
+  // это отдельное событие поверх неё. Ноль = возвратов не было.
+  returnedTotal Decimal       @default(0) @db.Decimal(10, 2)
+  returnedAt    DateTime?
   createdAt     DateTime      @default(now())
   items         SaleItem[]
   // Общепит: если продажа пришла из заказа (оплата в HORECA-режиме кассы),
@@ -324,6 +329,9 @@ model SaleItem {
   product     Product @relation(fields: [productId], references: [id])
   quantity    Decimal @db.Decimal(10, 3)
   priceAtSale Decimal @db.Decimal(10, 2)
+  // Сколько из этой строки уже вернули. Возврат бывает частичным (взяли 3,
+  // вернули 1), поэтому храним количество, а не флаг.
+  returnedQty Decimal @default(0) @db.Decimal(10, 3)
 
   @@index([productId])
 }

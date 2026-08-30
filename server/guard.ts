@@ -34,6 +34,8 @@ async function isBillingBlocked(db: ReturnType<typeof tenantDb>, organizationId:
 // Не та роль — редирект на «свой» дом, а не 403-заглушка.
 export async function requireRole(...allowed: Role[]): Promise<{ user: SessionUser; db: ReturnType<typeof tenantDb> }> {
   const user = await getCurrentUser();
+  // Куда человек шёл — запоминает middleware.ts (там доступен адрес запроса).
+  // Сюда мы попадаем, только если cookie есть, но сессия уже недействительна.
   if (!user) redirect("/login");
   if (allowed.length && !allowed.includes(user.role)) redirect(homeFor(user.role));
   const db = tenantDb(user.organizationId);

@@ -13,7 +13,15 @@ const FILTER_LABELS: Record<ProductFilter, string> = {
   all: "Все", low: "Мало осталось", expiring: "Скоро истечёт", inactive: "Снятые с продажи",
 };
 
-export function ProductsManager({ products, filter, query }: { products: ProductRow[]; filter: ProductFilter; query: string }) {
+export function ProductsManager({
+  products, filter, query, categories, category,
+}: {
+  products: ProductRow[];
+  filter: ProductFilter;
+  query: string;
+  categories: string[];
+  category: string;
+}) {
   const router = useRouter();
   const [editing, setEditing] = useState<ProductRow | "new" | null>(null);
   const [newBarcode, setNewBarcode] = useState<string | undefined>(undefined);
@@ -83,19 +91,27 @@ export function ProductsManager({ products, filter, query }: { products: Product
     });
   };
 
-  const setFilter = (f: ProductFilter) => {
+  // Все три фильтра (состояние, категория, поиск) живут в адресе строки и
+  // складываются друг с другом. Раньше каждый из них собирал адрес сам и
+  // затирал остальные — теперь одна общая функция.
+  const go = (next: { filter?: ProductFilter; category?: string; q?: string }) => {
     const params = new URLSearchParams();
+    const f = next.filter ?? filter;
+    const c = next.category ?? category;
+    const search = next.q ?? q;
     if (f !== "all") params.set("filter", f);
-    if (q) params.set("q", q);
-    router.push(`/admin?${params.toString()}`);
+    if (c) params.set("category", c);
+    if (search) params.set("q", search);
+    const qs = params.toString();
+    router.push(qs ? `/admin?${qs}` : "/admin");
   };
+
   const submitSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    const params = new URLSearchParams();
-    if (filter !== "all") params.set("filter", filter);
-    if (q) params.set("q", q);
-    router.push(`/admin?${params.toString()}`);
+    go({ q });
   };
+
+  const hasFilters = filter !== "all" || !!category || !!q;
 
   return (
     <div>
@@ -113,15 +129,41 @@ export function ProductsManager({ products, filter, query }: { products: Product
         <Button variant="stamp" onClick={() => setEditing("new")}>+ Товар</Button>
       </div>
 
-      <SegmentedControl
-        className="mb-4"
-        value={filter}
-        onChange={setFilter}
-        options={(Object.keys(FILTER_LABELS) as ProductFilter[]).map((f) => ({ value: f, label: FILTER_LABELS[f] }))}
-      />
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <SegmentedControl
+          value={filter}
+          onChange={(f: ProductFilter) => go({ filter: f })}
+          options={(Object.keys(FILTER_LABELS) as ProductFilter[]).map((f) => ({ value: f, label: FILTER_LABELS[f] }))}
+        />
+        {categories.length > 0 && (
+          <label className="inline-flex items-center gap-2">
+            <span className="sr-only">Категория</span>
+            <select
+              value={category}
+              onChange={(e) => go({ category: e.target.value })}
+              className="h-10 px-2.5 bg-paper border border-line rounded-tag text-sm focus:border-ink max-w-[11rem]"
+            >
+              <option value="">Все категории</option>
+              {categories.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </label>
+        )}
+        {hasFilters && (
+          <button
+            onClick={() => { setQ(""); router.push("/admin"); }}
+            className="h-10 px-3 rounded-tag border border-line text-sm text-ink-soft hover:border-ink"
+          >
+            Сбросить
+          </button>
+        )}
+      </div>
 
       {products.length === 0 ? (
-        <EmptyState>Ничего не найдено по этому фильтру.</EmptyState>
+        <EmptyState>
+          {hasFilters ? "Ничего не найдено — попробуйте сбросить фильтры." : "Товаров пока нет."}
+        </EmptyState>
       ) : (
         <>
           {/* Десктоп/планшет — таблица (без изменений) */}

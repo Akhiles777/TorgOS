@@ -39,12 +39,34 @@ function row(p: {
 
 export type ProductFilter = "all" | "low" | "expiring" | "inactive";
 
-export async function listProducts(db: TenantDb, storeId: string, filter: ProductFilter, q?: string): Promise<ProductRow[]> {
+// Категории точки для выпадающего фильтра. Считаем по активным товарам —
+// в списке не должно быть категорий, от которых остались только снятые с
+// продажи позиции.
+export async function listCategories(db: TenantDb, storeId: string): Promise<string[]> {
+  const rows = await db.product.findMany({
+    where: { storeId, isActive: true },
+    select: { category: true },
+    distinct: ["category"],
+    orderBy: { category: "asc" },
+  });
+  return rows.map((r) => r.category).filter(Boolean);
+}
+
+export async function listProducts(
+  db: TenantDb,
+  storeId: string,
+  filter: ProductFilter,
+  q?: string,
+  category?: string,
+): Promise<ProductRow[]> {
   const soon = new Date(Date.now() + 5 * 86_400_000);
   const where: Prisma.ProductWhereInput = { storeId };
   if (filter === "inactive") where.isActive = false;
   else where.isActive = true;
   if (filter === "expiring") where.expiry = { not: null, lte: soon };
+  // Фильтр по категории — точное совпадение: список категорий берётся из этой
+  // же базы, поэтому «похожие» варианты искать не нужно.
+  if (category?.trim()) where.category = category.trim();
   if (q?.trim()) where.OR = [{ name: { contains: q.trim(), mode: "insensitive" } }, { barcode: { contains: q.trim() } }];
 
   const rows = await db.product.findMany({ where, orderBy: [{ category: "asc" }, { name: "asc" }] });

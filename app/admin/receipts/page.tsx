@@ -16,7 +16,12 @@ export default async function ReceiptsPage() {
       <AdminTabs />
       <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 mb-4">
         <h1 className="text-xl font-semibold">Чеки за сегодня</h1>
-        <span className="text-ink-soft text-sm">{totals.count} чеков · {money0(totals.sum)} ₽</span>
+        <span className="text-ink-soft text-sm">
+          {totals.count} чеков · {money0(totals.sum)} ₽
+          {totals.returned > 0 && (
+            <span className="text-stamp-text"> · возвраты {money0(totals.returned)} ₽</span>
+          )}
+        </span>
       </div>
       <div className="grid grid-cols-2 gap-2 mb-5 max-w-sm">
         <Mini label="Наличные" value={totals.CASH} />
