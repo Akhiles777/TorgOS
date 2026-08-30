@@ -59,6 +59,11 @@ export function Tiles({
     }
   };
 
+  // Нулевой остаток продажу НЕ запрещает. Раньше плитка была disabled, и кассир
+  // не мог пробить то, что физически лежит перед ним: пока склад не ведут,
+  // остаток у большинства товаров просто ноль. Сервер такие продажи и так
+  // пропускает (см. commitSale), а метка «нет» остаётся — это подсказка
+  // пересчитать товар, а не запрет продавать.
   const renderTile = (p: PosProduct) => {
     const currentStock = stock[p.id] ?? p.stock;
     const low = currentStock <= (p.unit === "KG" ? 1 : 3);
@@ -67,7 +72,6 @@ export function Tiles({
       <button
         key={p.id}
         onClick={() => onPick(p)}
-        disabled={out}
         className="relative text-left min-h-[92px] p-3 rounded-tag border border-line bg-paper-2 hover:border-ink active:scale-[0.98] transition flex flex-col justify-between disabled:opacity-50 font-app-text"
       >
         <span className="font-medium leading-tight text-base line-clamp-3">{p.name}</span>
