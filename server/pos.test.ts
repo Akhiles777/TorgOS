@@ -1,6 +1,9 @@
 // Проверяем целостность данных при продаже: успех атомарен, а любая ошибка
-// (нехватка остатка, чужой товар) НЕ оставляет частичных записей — всё
+// (чужой товар, нехватка наличных) НЕ оставляет частичных записей — всё
 // откатывается. Это гарантия «при багах данные целы».
+//
+// Нехватка остатка ошибкой больше не считается: продажа проходит, остаток
+// уходит в минус (решение владельца).
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { PrismaClient } from "@prisma/client";
 import { tenantDb } from "./tenant";
@@ -64,13 +67,41 @@ describe("целостность продажи", () => {
     expect(after.moves).toBe(before.moves + 1);
   });
 
-  it("нехватка остатка (2-й товар) откатывает ВСЮ транзакцию — ничего не записано", async () => {
+  /**
+   * Нехватка остатка продажу не блокирует (решение владельца).
+   *
+   * Товар считают не каждый день, учётный остаток отстаёт от полки, и касса
+   * отказывалась пробить то, что лежит перед кассиром. Остаток уходит в минус
+   * — это честная запись «продали больше, чем числилось», по ней и видно, что
+   * пора пересчитать.
+   */
+  it("нехватка остатка не мешает продаже, остаток уходит в минус", async () => {
     const db = tenantDb(orgId);
     const before = await snapshot();
-    // A хватает, B (остаток 2) просят 5 — должно упасть и откатить списание A
+    // B: остаток 2, просят 5 → чек проходит, остаток становится −3.
+    const res = await commitSale(db, storeId, cashierId, {
+      lines: [{ productId: pB, quantity: 5 }],
+      paymentMethod: "CARD",
+    });
+    expect(res.saleId).toBeTruthy();
+    const after = await snapshot();
+    expect(after.b).toBe(before.b - 5);
+    expect(after.sales).toBe(before.sales + 1);
+    expect(after.moves).toBe(before.moves + 1);
+  });
+
+  /**
+   * Атомарность проверяем на ошибке, которая осталась: чужой товар.
+   *
+   * Раньше её сторожила нехватка остатка — теперь она продажу не отменяет, а
+   * гарантия «при сбое ничего не записано наполовину» нужна по-прежнему.
+   */
+  it("чужой товар откатывает ВСЮ транзакцию — ничего не записано", async () => {
+    const db = tenantDb(orgId);
+    const before = await snapshot();
     await expect(
       commitSale(db, storeId, cashierId, {
-        lines: [{ productId: pA, quantity: 1 }, { productId: pB, quantity: 5 }],
+        lines: [{ productId: pA, quantity: 1 }, { productId: "не-наш-товар", quantity: 1 }],
         paymentMethod: "CARD",
       }),
     ).rejects.toThrow(PosError);

@@ -62,7 +62,11 @@ const MODEL_FAST = "perplexity/sonar";
 // применяется к меньшинству позиций и общий счёт растёт незначительно.
 const MODEL_DEEP = "perplexity/sonar-pro";
 const TIMEOUT_MS = 45_000;
-const CONCURRENCY = 5;
+// 3, а не 5: на пачке в 30 позиций пять параллельных цепочек создавали
+// шквал обращений к чужим справочникам и роутеру, ловили 429 и теряли
+// позиции. Три — заметно устойчивее, а по времени почти не медленнее,
+// потому что большинство товаров закрывает бесплатный справочник за 0,2с.
+const CONCURRENCY = 3;
 // Потолок на «дорогие» повторы в одной пачке — предохранитель от ситуации,
 // когда пользователь загнал 40 несуществующих кодов и каждый пошёл на второй
 // круг. Остальные честно вернут «не найдено» после первого захода.
@@ -70,6 +74,8 @@ const MAX_ESCALATIONS = 15;
 // Потолок на список категорий в промпте: у большого магазина их могут быть
 // десятки, и каждая уходит в оплачиваемые входные токены на КАЖДЫЙ штрихкод.
 const MAX_CATEGORY_HINTS = 20;
+// Сколько раз повторить обращение к модели при временном сбое роутера.
+const AI_RETRIES = 2;
 
 export type Confidence = "high" | "low";
 
@@ -93,7 +99,11 @@ export type BarcodeLookupResult =
       inTwoSources?: boolean;
       known?: true;
     }
-  | { barcode: string; found: false; error: string };
+  // retryable — это НЕ «товара нет», а «не смогли проверить»: справочник или
+  // модель не ответили. Разделять обязательно: иначе сбой связи выглядит для
+  // продавца так же, как отсутствие товара, и он впустую вбивает название
+  // руками. Ровно на этом и терялась половина позиций в больших пачках.
+  | { barcode: string; found: false; error: string; retryable?: boolean };
 
 export class BarcodeLookupError extends Error {}
 
@@ -201,18 +211,31 @@ async function askModel(barcode: string, categories: string[], deep: boolean): P
     ? process.env.ROUTERAI_BARCODE_MODEL_DEEP || MODEL_DEEP
     : process.env.ROUTERAI_BARCODE_MODEL || MODEL_FAST;
 
-  let raw: string;
-  try {
-    raw = await chatComplete(
-      [
-        { role: "system", content: buildSystem(categories, deep) },
-        { role: "user", content: userLines.join("\n") },
-      ],
-      { model, maxTokens: 300, timeoutMs: TIMEOUT_MS },
-    );
-  } catch (e) {
-    if (e instanceof AiUnavailableError) return { barcode, found: false, error: "ИИ недоступен" };
-    throw e;
+  // Повторы: у роутера бывают 429 и таймауты, особенно когда пачка идёт
+  // волнами. Без повтора такой сбой возвращался как «не нашли в сети».
+  let raw = "";
+  let lastError: AiUnavailableError | null = null;
+  for (let attempt = 0; attempt <= AI_RETRIES; attempt++) {
+    try {
+      raw = await chatComplete(
+        [
+          { role: "system", content: buildSystem(categories, deep) },
+          { role: "user", content: userLines.join("\n") },
+        ],
+        { model, maxTokens: 300, timeoutMs: TIMEOUT_MS },
+      );
+      lastError = null;
+      break;
+    } catch (e) {
+      if (!(e instanceof AiUnavailableError)) throw e;
+      lastError = e;
+      if (attempt < AI_RETRIES) {
+        await new Promise((r) => setTimeout(r, 800 * 2 ** attempt + Math.floor(Math.random() * 300)));
+      }
+    }
+  }
+  if (lastError) {
+    return { barcode, found: false, error: "ИИ не ответил — попробуйте ещё раз", retryable: true };
   }
 
   const parsed = extractJson(raw);
@@ -353,7 +376,10 @@ export async function lookupBarcode(
   if (fast.found) return { ...fast, source: "web" };
   // Шаг 3 — один более глубокий заход по тому, что не нашлось.
   const deep = await askModel(barcode, categories, true);
-  return deep.found ? { ...deep, source: "web" } : deep;
+  if (deep.found) return { ...deep, source: "web" };
+  // Справочник отвалился по сбою — значит «не нашли» тут не окончательно:
+  // предлагаем повторить, а не заставляем вбивать название руками.
+  return free.degraded ? { ...deep, retryable: true } : deep;
 }
 
 // Пачка штрихкодов — по одному запросу на код (так качество заметно выше, чем
@@ -379,13 +405,16 @@ export async function lookupBarcodes(barcodes: string[], categories: string[]): 
           const fast = await askModel(code, categories, false);
           if (fast.found) return { ...fast, source: "web" };
           // Второй заход — пока не исчерпан лимит дорогих повторов на пачку.
-          if (escalations >= MAX_ESCALATIONS) return fast;
+          if (escalations >= MAX_ESCALATIONS) {
+            return free.degraded ? { ...fast, retryable: true } : fast;
+          }
           escalations++;
           const deep = await askModel(code, categories, true);
-          return deep.found ? { ...deep, source: "web" } : deep;
+          if (deep.found) return { ...deep, source: "web" };
+          return free.degraded ? { ...deep, retryable: true } : deep;
         } catch (e) {
           console.error("barcode lookup failed", code, e);
-          return { barcode: code, found: false, error: "Сбой поиска" };
+          return { barcode: code, found: false, error: "Сбой связи — повторите", retryable: true };
         }
       }),
     );

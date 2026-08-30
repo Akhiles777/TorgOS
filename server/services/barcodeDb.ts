@@ -8,12 +8,30 @@
 // Поэтому порядок в barcodeLookup.ts такой: сначала бесплатный справочник,
 // платная модель с веб-поиском — только если справочник промолчал.
 
+import { politeFetch, LookupUnavailableError } from "./politeFetch";
+
 const ENDPOINT = "https://barcode-list.ru/barcode/RU/Поиск.htm";
+const RU_HOST = "barcode-list.ru";
+// Пауза между запросами к справочнику. Изначально стояло 120мс, и на разборе
+// пачки в 30 позиций сайт переставал отвечать данными: он не выдаёт 429, а
+// молча отдаёт ту же страницу с пустой таблицей. Со стороны это неотличимо от
+// «такого товара нет» — именно так и терялась половина позиций в больших
+// пачках. 600мс на позицию для фонового разбора незаметны, зато справочник
+// продолжает отвечать.
+const RU_GAP_MS = 600;
 const TIMEOUT_MS = 12_000;
 // Сутки: товарные названия в справочнике меняются крайне редко, а повторный
 // скан того же штрихкода (пересорт, вторая поставка) — обычное дело.
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+// Пустой ответ чужого справочника — не факт, а мнение на сейчас: он мог быть
+// перегружен. Держим такой ответ недолго, чтобы повтор через несколько минут
+// имел шанс, и товар не считался несуществующим целые сутки.
+const NEGATIVE_TTL_MS = 10 * 60 * 1000;
 const CACHE_MAX = 500;
+
+function ttlFor(empty: boolean): number {
+  return empty ? NEGATIVE_TTL_MS : CACHE_TTL_MS;
+}
 
 export type BarcodeDbEntry = {
   name: string;
@@ -169,11 +187,18 @@ export function guessCategory(name: string, storeCategories: string[] = []): str
 // Закрывает ровно ту дыру, где российский справочник бессилен: импортная еда и
 // косметика. Проверено вживую: Nutella и Coca-Cola там есть с брендом и
 // объёмом, российской канцелярии нет — источники дополняют друг друга.
+// Порядок важен: сначала продукты (самая полная база), потом косметика,
+// потом непродовольственное. Идём по одному и останавливаемся на первом
+// найденном — раньше опрашивались все три сразу, и на пачке это давало
+// 15 одновременных запросов и шквал 429.
 const OFF_HOSTS = [
   "world.openfoodfacts.org",
   "world.openbeautyfacts.org",
   "world.openproductsfacts.org",
 ];
+// Open Food Facts просит не чаще ~100 запросов в минуту на product-эндпоинт.
+// Держим заметный запас: живой замер ловил 429 даже на одиночных запросах.
+const OFF_GAP_MS = 700;
 
 type OffProduct = {
   product_name?: string;
@@ -198,28 +223,33 @@ function offName(p: OffProduct): string {
 
 async function lookupOpenFacts(barcode: string): Promise<BarcodeDbEntry[]> {
   const fields = "product_name,product_name_ru,brands,quantity";
-  const results = await Promise.all(
-    OFF_HOSTS.map(async (host) => {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-      try {
-        const res = await fetch(`https://${host}/api/v2/product/${encodeURIComponent(barcode)}.json?fields=${fields}`, {
-          signal: controller.signal,
-          headers: { "User-Agent": "TorgOS/1.0 (+https://torgos.ru)" },
-        });
-        if (!res.ok) return null;
-        const data = (await res.json()) as { status?: number; product?: OffProduct };
-        if (data.status !== 1 || !data.product) return null;
-        const name = offName(data.product);
-        return name ? ({ name, unit: null, rating: 5, origin: "off" } as BarcodeDbEntry) : null;
-      } catch {
-        return null;
-      } finally {
-        clearTimeout(timer);
-      }
-    }),
-  );
-  return results.filter((r): r is BarcodeDbEntry => r !== null);
+  let unavailable: unknown = null;
+
+  for (const host of OFF_HOSTS) {
+    try {
+      const res = await politeFetch(
+        host,
+        `https://${host}/api/v2/product/${encodeURIComponent(barcode)}.json?fields=${fields}`,
+        // User-Agent в формате, который просит Open Food Facts: имя, версия, контакт.
+        { headers: { "User-Agent": "TorgOS/1.0 (https://torgos.ru)" } },
+        // Open Food Facts при лимите отвечает 429 на всё подряд: быстро
+        // признаём его недоступным, чтобы не тормозить разбор пачки.
+        { minGapMs: OFF_GAP_MS, retries: 1, timeoutMs: TIMEOUT_MS, circuitAfter: 2, circuitCooldownMs: 5 * 60_000 },
+      );
+      if (res.status === 404) continue;
+      if (!res.ok) continue;
+      const data = (await res.json()) as { status?: number; product?: OffProduct };
+      if (data.status !== 1 || !data.product) continue;
+      const name = offName(data.product);
+      // Нашли — дальше не ходим: остальные хосты этот товар всё равно не знают.
+      if (name) return [{ name, unit: null, rating: 5, origin: "off" }];
+    } catch (e) {
+      // Запоминаем недоступность, но пробуем следующий хост.
+      unavailable = e;
+    }
+  }
+  if (unavailable instanceof LookupUnavailableError) throw unavailable;
+  return [];
 }
 
 // Для сверки источников: «Nutella Ferrero 400 g» и «Ferrero Nutella, 400 г» —
@@ -254,18 +284,68 @@ export type FreeLookup = {
   // Названия из разных источников совпали и по смыслу — самый сильный признак.
   namesMatch: boolean;
   origins: ("ru" | "off")[];
+  // Хотя бы один справочник не ответил (429, таймаут). Пустой результат в
+  // этом случае НЕ означает «товара нет» — значит «не удалось проверить»,
+  // и вызывающий должен предложить повтор, а не писать «не найдено».
+  degraded: boolean;
 };
 
 // Оба бесплатных источника разом. Ни один из них не стоит денег, поэтому
 // спрашиваем всегда и параллельно — до платного ИИ-поиска дело доходит,
 // только если оба промолчали.
+// Кеш сводного ответа справочников. Кешируем только удачные разборы (в том
+// числе честное «нигде нет»): результат со сбоем сохранять нельзя — иначе
+// временная недоступность Open Food Facts запомнилась бы на сутки как
+// «товара не существует».
+const freeCache = new Map<string, { at: number; value: FreeLookup }>();
+
 export async function lookupFreeSources(barcode: string): Promise<FreeLookup> {
-  const [ru, off] = await Promise.all([lookupBarcodeDb(barcode), lookupOpenFacts(barcode)]);
+  const cached = freeCache.get(barcode);
+  if (cached && Date.now() - cached.at < ttlFor(cached.value.entries.length === 0)) return cached.value;
+
+  // Порядок, а не параллель. Российский справочник быстрый (0,2с), надёжный и
+  // знает большинство товаров российского магазина. Open Food Facts, наоборот,
+  // жёстко ограничивает частоту и отвечает 429 — поэтому идём к нему только
+  // тогда, когда первый ничего не дал. На пачке из 30 позиций это убирает
+  // почти все обращения ко второму источнику и снимает лимит.
+  let ru: BarcodeDbEntry[] = [];
+  let ruFailed = false;
+  try {
+    ru = await lookupBarcodeDb(barcode);
+  } catch (e) {
+    ruFailed = true;
+    console.warn("справочник RU недоступен:", (e as Error)?.message);
+  }
+
+  let off: BarcodeDbEntry[] = [];
+  let offFailed = false;
+  if (ru.length === 0) {
+    try {
+      off = await lookupOpenFacts(barcode);
+    } catch (e) {
+      offFailed = true;
+      console.warn("Open Food Facts недоступен:", (e as Error)?.message);
+    }
+  }
+  // «Не удалось проверить» — только если ни один источник не дал ответа И
+  // при этом кто-то из них отказал. Если товар нашёлся, сбой второго не важен.
+  const degraded = ru.length === 0 && off.length === 0 && (ruFailed || offFailed);
+
   const entries = [...ru, ...off];
   const inTwoSources = ru.length > 0 && off.length > 0;
   const namesMatch = inTwoSources && ru.some((r) => off.some((o) => namesAgree(r.name, o.name)));
   const origins = [...new Set(entries.map((e) => e.origin))];
-  return { entries, inTwoSources, namesMatch, origins };
+  const value: FreeLookup = { entries, inTwoSources, namesMatch, origins, degraded };
+  if (!degraded) {
+    if (freeCache.size >= CACHE_MAX) {
+      let oldestKey: string | null = null;
+      let oldestAt = Infinity;
+      for (const [k, v] of freeCache) if (v.at < oldestAt) { oldestAt = v.at; oldestKey = k; }
+      if (oldestKey) freeCache.delete(oldestKey);
+    }
+    freeCache.set(barcode, { at: Date.now(), value });
+  }
+  return value;
 }
 
 // Какой из вариантов справочника показать человеку. Один рейтинг —
@@ -281,38 +361,44 @@ export function pickBestEntry(entries: BarcodeDbEntry[]): BarcodeDbEntry | null 
   return entries.reduce((best, e) => (score(e) > score(best) ? e : best), entries[0]);
 }
 
+function remember(barcode: string, entries: BarcodeDbEntry[]) {
+  if (cache.size >= CACHE_MAX) {
+    // Простейшая уборка: выкидываем самую старую запись.
+    let oldestKey: string | null = null;
+    let oldestAt = Infinity;
+    for (const [k, v] of cache) if (v.at < oldestAt) { oldestAt = v.at; oldestKey = k; }
+    if (oldestKey) cache.delete(oldestKey);
+  }
+  cache.set(barcode, { at: Date.now(), entries });
+}
+
+// Бросает LookupUnavailableError, если справочник не ответил. Раньше здесь
+// стоял «return []», и недоступность справочника выглядела для пользователя
+// как «товара нет» — из-за этого пачки и теряли половину позиций.
 export async function lookupBarcodeDb(barcode: string): Promise<BarcodeDbEntry[]> {
   const hit = cache.get(barcode);
-  if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.entries;
+  if (hit && Date.now() - hit.at < ttlFor(hit.entries.length === 0)) return hit.entries;
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-  try {
-    const res = await fetch(`${ENDPOINT}?barcode=${encodeURIComponent(barcode)}`, {
-      signal: controller.signal,
+  const res = await politeFetch(
+    RU_HOST,
+    `${ENDPOINT}?barcode=${encodeURIComponent(barcode)}`,
+    {
       headers: {
         // Без внятного User-Agent сайт отдаёт заглушку.
         "User-Agent": "Mozilla/5.0 (compatible; TorgOS/1.0; +https://torgos.ru)",
         "Accept-Language": "ru-RU,ru;q=0.9",
       },
-    });
-    if (!res.ok) return [];
-    const entries = parseBarcodeListHtml(await res.text(), barcode);
-
-    if (cache.size >= CACHE_MAX) {
-      // Простейшая уборка: выкидываем самую старую запись.
-      let oldestKey: string | null = null;
-      let oldestAt = Infinity;
-      for (const [k, v] of cache) if (v.at < oldestAt) { oldestAt = v.at; oldestKey = k; }
-      if (oldestKey) cache.delete(oldestKey);
-    }
-    cache.set(barcode, { at: Date.now(), entries });
-    return entries;
-  } catch {
-    // Справочник недоступен или медленный — не повод ронять добавление товара:
-    // вызывающий просто пойдёт дальше, к платному поиску.
+    },
+    // Справочник надёжен — отключаем его только после серии отказов и
+    // ненадолго, иначе потеряем основной бесплатный источник из-за всплеска.
+    { minGapMs: RU_GAP_MS, retries: 2, timeoutMs: TIMEOUT_MS, circuitAfter: 5, circuitCooldownMs: 60_000 },
+  );
+  if (!res.ok) {
+    // 404 и прочие окончательные ответы — «нет такого», запоминаем.
+    remember(barcode, []);
     return [];
-  } finally {
-    clearTimeout(timer);
   }
+  const entries = parseBarcodeListHtml(await res.text(), barcode);
+  remember(barcode, entries);
+  return entries;
 }

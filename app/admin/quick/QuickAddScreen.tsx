@@ -23,7 +23,9 @@ type Row = {
   // а что нужно дописать руками.
   // guess — ИИ восстановил название по бренду/производителю, точного совпадения
   // не нашёл. Такие обязательно нужно проверить глазами, поэтому отдельный вид.
-  status: "new" | "found" | "guess" | "notfound" | "exists";
+  // retry — проверить не удалось (справочник или модель не ответили).
+  // Это НЕ «товара нет»: такие строки надо просто прогнать ещё раз.
+  status: "new" | "found" | "guess" | "notfound" | "retry" | "exists";
   note?: string;
   // Другие написания того же товара из справочников — выбираются одним тапом.
   alternatives?: string[];
@@ -54,7 +56,7 @@ function sanitizeRow(raw: unknown): Row | null {
   const r = raw as Record<string, unknown>;
   const barcode = String(r.barcode ?? "").trim();
   if (!barcode) return null;
-  const KNOWN_STATUSES = ["found", "guess", "notfound", "exists"] as const;
+  const KNOWN_STATUSES = ["found", "guess", "notfound", "retry", "exists"] as const;
   const status = (KNOWN_STATUSES as readonly string[]).includes(String(r.status))
     ? (r.status as Row["status"])
     : "new";
@@ -186,7 +188,7 @@ export function QuickAddScreen({ storeId }: { storeId: string }) {
                   : undefined,
             };
           }
-          return { ...r, status: "notfound", note: found.error };
+          return { ...r, status: found.retryable ? "retry" : "notfound", note: found.error };
         }),
       );
     });
@@ -222,6 +224,7 @@ export function QuickAddScreen({ storeId }: { storeId: string }) {
   };
 
   const notFoundCount = rows.filter((r) => r.status === "notfound" && !r.name.trim()).length;
+  const retryCount = rows.filter((r) => r.status === "retry" && !r.name.trim()).length;
 
   return (
     <div className="max-w-4xl">
@@ -299,6 +302,12 @@ export function QuickAddScreen({ storeId }: { storeId: string }) {
               {notFoundCount} шт. ИИ не нашёл в интернете — впишите название руками, и они тоже сохранятся.
             </p>
           )}
+          {retryCount > 0 && (
+            <p className="text-sm text-stamp-text mb-2">
+              {retryCount} шт. не удалось проверить — справочник не ответил. Нажмите «Сканирование ИИ»
+              ещё раз, названия подтянутся.
+            </p>
+          )}
           {zeroPriced > 0 && (
             <p className="text-sm text-warn-text mb-2">
               {zeroPriced} шт. с нулевой ценой — такие не сохранятся, проставьте цену.
@@ -316,7 +325,7 @@ export function QuickAddScreen({ storeId }: { storeId: string }) {
               <div
                 key={r.key}
                 className={`border rounded-tag p-3 ${
-                  r.status === "exists" || r.status === "guess" || (r.status === "notfound" && !r.name.trim())
+                  r.status === "exists" || r.status === "guess" || r.status === "retry" || (r.status === "notfound" && !r.name.trim())
                     ? "border-warn bg-warn/5"
                     : "border-line bg-paper-2"
                 }`}
@@ -338,6 +347,7 @@ export function QuickAddScreen({ storeId }: { storeId: string }) {
                   {r.status === "guess" && <span className="text-xs text-warn-text min-w-0">{r.note ?? "ИИ не уверен"}</span>}
                   {r.status === "exists" && <span className="text-xs text-warn-text min-w-0">{r.note ?? "уже есть в базе"}</span>}
                   {r.status === "notfound" && <span className="text-xs text-warn-text min-w-0">{r.note ?? "не найден"}</span>}
+                  {r.status === "retry" && <span className="text-xs text-stamp-text min-w-0">{r.note ?? "не удалось проверить"}</span>}
                   <button onClick={() => removeRow(r.key)} className="text-xs text-ink-soft hover:text-stamp-text px-2 ml-auto shrink-0">
                     убрать
                   </button>

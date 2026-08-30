@@ -90,7 +90,17 @@ export async function commitSale(
 
     for (const p of products) {
       const q = new Prisma.Decimal(merged.get(p.id)!.toFixed(3));
-      if (p.stock.lessThan(q)) throw new PosError(`Недостаточно остатка: ${p.name}`);
+      /**
+       * Нехватка остатка продажу НЕ блокирует (решение владельца).
+       *
+       * Товар считают не каждый день, и учётный остаток отстаёт от полки:
+       * касса отказывалась пробить то, что лежит перед кассиром. Отказ в
+       * продаже стоит дороже неточного числа в отчёте.
+       *
+       * Остаток при этом списывается как обычно и уходит в минус. Это не
+       * ошибка, а честная запись: продали больше, чем числилось. Минус видно в
+       * товарах и в движениях — по нему и находят, что пора пересчитать.
+       */
       const price = p.price;
       total = total.plus(price.times(q));
       items.push({ productId: p.id, quantity: q, priceAtSale: price });

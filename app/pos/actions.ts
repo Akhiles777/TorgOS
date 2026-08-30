@@ -43,7 +43,7 @@ export type PosLookupResult =
       // Название пришло только из ИИ-поиска — его обязательно надо сверить.
       fromWeb?: boolean;
     }
-  | { ok: false; error: string };
+  | { ok: false; error: string; retryable?: boolean };
 
 export async function posLookupBarcodeAction(barcode: string): Promise<PosLookupResult> {
   try {
@@ -61,7 +61,7 @@ export async function posLookupBarcodeAction(barcode: string): Promise<PosLookup
     // tidy: false — на кассе ждать модель нельзя, справочник отвечает за
     // доли секунды, а название приводится локальными правилами.
     const res = await lookupBarcode(clean, cats.map((c) => c.category).filter(Boolean), { tidy: false });
-    if (!res.found) return { ok: false, error: res.error };
+    if (!res.found) return { ok: false, error: res.error, retryable: res.retryable ?? false };
     return {
       ok: true, name: res.name, category: res.category, sure: res.confidence === "high",
       unit: res.unit, alternatives: res.alternatives ?? [], verified: res.verified ?? false,
